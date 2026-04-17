@@ -37,6 +37,8 @@ export default function BudgetApp() {
   const [detectedSubs, setDetectedSubs] = useState(null);
   const [selectedSubIds, setSelectedSubIds] = useState(new Set());
   const csvFileRef = useRef(null);
+  const [categoryBudgets, setCategoryBudgets] = useState({});
+  const [showBudgetEditor, setShowBudgetEditor] = useState(false);
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const fmt = useMemo(() => makeFmt(currency), [currency]);
 
@@ -52,6 +54,7 @@ export default function BudgetApp() {
       if (Array.isArray(d.goals)) setGoals(d.goals);
       if (Array.isArray(d.accounts)) setAccounts(d.accounts);
       if (Array.isArray(d.transactions)) setTransactions(d.transactions);
+      if (d.categoryBudgets && typeof d.categoryBudgets === "object") setCategoryBudgets(d.categoryBudgets);
       if (d.view) setView(d.view);
       if (d.darkMode !== undefined) setDarkMode(d.darkMode);
       if (d.currency && CURRENCIES.some((c) => c.code === d.currency)) setCurrency(d.currency);
@@ -61,12 +64,12 @@ export default function BudgetApp() {
 
   useEffect(() => {
     if (!loaded) return;
-    const r = saveStored({ items, goals, accounts, transactions, view, darkMode, currency });
+    const r = saveStored({ items, goals, accounts, transactions, categoryBudgets, view, darkMode, currency });
     setSaveError(r.ok ? null : r.error);
-  }, [items, goals, accounts, transactions, view, darkMode, currency, loaded]);
+  }, [items, goals, accounts, transactions, categoryBudgets, view, darkMode, currency, loaded]);
 
   const handleExport = () => {
-    const payload = { version: SCHEMA_VERSION, exportedAt: new Date().toISOString(), items, goals, accounts, transactions, view, darkMode, currency };
+    const payload = { version: SCHEMA_VERSION, exportedAt: new Date().toISOString(), items, goals, accounts, transactions, categoryBudgets, view, darkMode, currency };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -90,6 +93,7 @@ export default function BudgetApp() {
         if (Array.isArray(d.goals)) setGoals(d.goals);
         if (Array.isArray(d.accounts)) setAccounts(d.accounts);
         if (Array.isArray(d.transactions)) setTransactions(d.transactions);
+        if (d.categoryBudgets && typeof d.categoryBudgets === "object") setCategoryBudgets(d.categoryBudgets);
         if (d.view) setView(d.view);
         if (d.darkMode !== undefined) setDarkMode(d.darkMode);
         if (d.currency && CURRENCIES.some((c) => c.code === d.currency)) setCurrency(d.currency);
@@ -458,6 +462,41 @@ export default function BudgetApp() {
               );
             })()}
 
+            {(() => {
+              const budgetedCats = Object.keys(categoryBudgets).filter(k => (categoryBudgets[k] || 0) > 0);
+              if (budgetedCats.length === 0) return null;
+              const now = new Date();
+              const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+              const monthTxns = transactions.filter(t => !t.isIncome && (t.date || "").slice(0, 7) === ym);
+              return (
+                <div style={S.card}>
+                  <h3 style={{ margin: "0 0 12px", fontSize: "13px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>This Month's Budgets</h3>
+                  {budgetedCats.map(cid => {
+                    const cat = CATEGORIES.find(c => c.id === cid) || { label: cid, icon: "•", color: T.textMuted };
+                    const budget = categoryBudgets[cid] || 0;
+                    const spent = monthTxns.filter(t => t.category === cid).reduce((s, t) => s + (t.amount || 0), 0);
+                    const pct = budget > 0 ? (spent / budget) * 100 : 0;
+                    const over = spent > budget;
+                    return (
+                      <div key={cid} style={{ marginBottom: "12px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <span style={{ color: cat.color, fontSize: "13px" }}>{cat.icon}</span>
+                            <span style={{ fontSize: "13px", fontWeight: "500" }}>{cat.label}</span>
+                          </div>
+                          <span style={{ fontSize: "12px", ...S.mono, color: over ? T.danger : T.textMuted }}>{fmt(spent)} / {fmt(budget)}</span>
+                        </div>
+                        <div style={{ height: "6px", background: T.inputBg, borderRadius: "3px", overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: over ? T.danger : cat.color, borderRadius: "3px", transition: "width 0.5s" }} />
+                        </div>
+                        {over && <p style={{ margin: "3px 0 0", fontSize: "10px", color: T.danger }}>{fmt(spent - budget)} over budget</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
             {transactions.length > 0 && (
               <div style={S.card}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
@@ -535,6 +574,26 @@ export default function BudgetApp() {
                 <select value={currency} onChange={(e) => setCurrency(e.target.value)} style={S.input}>
                   {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
                 </select>
+              </div>
+              <div style={{ marginBottom: "14px" }}>
+                <button onClick={() => setShowBudgetEditor(!showBudgetEditor)} style={{ width: "100%", padding: "10px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "8px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                  {showBudgetEditor ? "▾" : "▸"} Monthly category budgets
+                </button>
+                {showBudgetEditor && (
+                  <div style={{ marginTop: "8px" }}>
+                    <p style={{ margin: "0 0 8px", fontSize: "10px", color: T.textLight }}>Set a monthly spending limit per category. Progress is tracked against logged transactions.</p>
+                    {CATEGORIES.filter(c => c.id !== "income").map(c => (
+                      <div key={c.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                        <span style={{ color: c.color, fontSize: "12px", width: "18px" }}>{c.icon}</span>
+                        <span style={{ fontSize: "12px", flex: 1 }}>{c.label}</span>
+                        <input type="number" value={categoryBudgets[c.id] || ""} onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          setCategoryBudgets(p => ({ ...p, [c.id]: isFinite(v) && v >= 0 ? v : 0 }));
+                        }} placeholder="0" style={{ ...S.input, width: "90px", fontSize: "12px", padding: "6px 8px" }} />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <p style={{ margin: "0 0 8px", fontSize: "11px", color: T.textLight, fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.3px" }}>Backup</p>
               <p style={{ margin: "0 0 10px", fontSize: "11px", color: T.textLight }}>Your data is saved in this browser only. Export regularly.</p>
