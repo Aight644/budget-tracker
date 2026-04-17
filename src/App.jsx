@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { SCHEMA_VERSION, CATEGORIES, FREQUENCIES, CURRENCIES, DEFAULT_CURRENCY, ACCOUNT_TYPES } from "./lib/constants.js";
 import { loadStored, saveStored, clearStored } from "./lib/storage.js";
-import { toYr, convertBy } from "./lib/calc.js";
+import { toYr, convertBy, advanceDue, rollForwardDue, daysUntil } from "./lib/calc.js";
 import { makeFmt } from "./lib/format.js";
 import { parseCSV, detectColumns, rowsToTransactions } from "./lib/csv.js";
 import { detectSubscriptions } from "./lib/subscriptions.js";
@@ -14,7 +14,7 @@ export default function BudgetApp() {
   const [showGoalForm, setShowGoalForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingGoalId, setEditingGoalId] = useState(null);
-  const [formData, setFormData] = useState({ name: "", amount: "", frequency: "monthly", category: "other", isIncome: false });
+  const [formData, setFormData] = useState({ name: "", amount: "", frequency: "monthly", category: "other", isIncome: false, dueDate: "" });
   const [goalFormData, setGoalFormData] = useState({ name: "", target: "", saved: "0", monthlySaving: "", deadline: "", color: "#16a34a" });
   const [loaded, setLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -116,7 +116,7 @@ export default function BudgetApp() {
   const leftover = totalIncome - totalExpenses;
   const categoryTotals = CATEGORIES.filter(c => c.id !== "income").map(cat => ({ ...cat, total: expenseItems.filter(i => i.category === cat.id).reduce((s, i) => s + convert(i.amount, i.frequency), 0) })).filter(c => c.total > 0);
 
-  const resetForm = () => { setFormData({ name: "", amount: "", frequency: "monthly", category: "other", isIncome: false }); setEditingId(null); setShowForm(false); };
+  const resetForm = () => { setFormData({ name: "", amount: "", frequency: "monthly", category: "other", isIncome: false, dueDate: "" }); setEditingId(null); setShowForm(false); };
   const resetGoalForm = () => { setGoalFormData({ name: "", target: "", saved: "0", monthlySaving: "", deadline: "", color: "#16a34a" }); setEditingGoalId(null); setShowGoalForm(false); };
   const resetAccountForm = () => { setAccountFormData({ name: "", type: "checking", balance: "", color: "#2563eb", includeInNetWorth: true }); setEditingAccountId(null); setShowAccountForm(false); };
 
@@ -268,7 +268,7 @@ export default function BudgetApp() {
     resetGoalForm();
   };
 
-  const startEdit = (item) => { setFormData({ name: item.name, amount: item.amount.toString(), frequency: item.frequency, category: item.category, isIncome: item.isIncome }); setEditingId(item.id); setShowForm(true); setActiveTab("items"); };
+  const startEdit = (item) => { setFormData({ name: item.name, amount: item.amount.toString(), frequency: item.frequency, category: item.category, isIncome: item.isIncome, dueDate: item.dueDate || "" }); setEditingId(item.id); setShowForm(true); setActiveTab("items"); };
   const startEditGoal = (g) => { setGoalFormData({ name: g.name, target: g.target.toString(), saved: g.saved.toString(), monthlySaving: g.monthlySaving.toString(), deadline: g.deadline || "", color: g.color || "#16a34a" }); setEditingGoalId(g.id); setShowGoalForm(true); };
 
   const viewLabel = view === "fortnightly" ? "/fn" : view === "monthly" ? "/mo" : "/yr";
@@ -463,6 +463,49 @@ export default function BudgetApp() {
             })()}
 
             {(() => {
+              const billsWithDue = items
+                .filter(i => !i.isIncome && i.dueDate)
+                .map(i => ({ ...i, dueDate: rollForwardDue(i.dueDate, i.frequency) }))
+                .map(i => ({ ...i, days: daysUntil(i.dueDate) }))
+                .filter(i => i.days !== null && i.days <= 30)
+                .sort((a, b) => a.days - b.days)
+                .slice(0, 6);
+              if (billsWithDue.length === 0) return null;
+              const totalDue = billsWithDue.reduce((s, b) => s + (b.amount || 0), 0);
+              return (
+                <div style={S.card}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                    <h3 style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>Upcoming Bills</h3>
+                    <span style={{ fontSize: "12px", ...S.mono, color: T.danger }}>{fmt(totalDue)}</span>
+                  </div>
+                  {billsWithDue.map(b => {
+                    const cat = CATEGORIES.find(c => c.id === b.category) || { color: T.textMuted, icon: "•" };
+                    const overdue = b.days < 0;
+                    const soon = b.days >= 0 && b.days <= 3;
+                    const label = overdue ? `${Math.abs(b.days)}d overdue` : b.days === 0 ? "Today" : b.days === 1 ? "Tomorrow" : `in ${b.days}d`;
+                    return (
+                      <div key={b.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", background: overdue ? T.dangerBg : soon ? T.inputBg : "transparent", border: `1px solid ${overdue ? T.dangerBorder : T.inputBorder}`, borderRadius: "8px", marginBottom: "6px" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <span style={{ color: cat.color, fontSize: "12px" }}>{cat.icon}</span>
+                            <span style={{ fontSize: "13px", fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.name}</span>
+                          </div>
+                          <p style={{ margin: "2px 0 0 18px", fontSize: "10px", color: overdue ? T.danger : T.textLight }}>{b.dueDate} · {label}</p>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "13px", ...S.mono, color: T.danger }}>{fmt(b.amount)}</span>
+                          <button onClick={() => {
+                            setItems(p => p.map(x => x.id === b.id ? { ...x, dueDate: advanceDue(b.dueDate, b.frequency) } : x));
+                          }} style={{ padding: "4px 8px", background: T.accentBg, border: `1px solid ${T.accentBorder}`, borderRadius: "6px", color: T.accent, fontSize: "11px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Paid</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {(() => {
               const budgetedCats = Object.keys(categoryBudgets).filter(k => (categoryBudgets[k] || 0) > 0);
               if (budgetedCats.length === 0) return null;
               const now = new Date();
@@ -642,6 +685,11 @@ export default function BudgetApp() {
                     </div>
                   </div>
                 )}
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={S.label}>Next due date (optional)</label>
+                  <input type="date" value={formData.dueDate} onChange={e => setFormData({ ...formData, dueDate: e.target.value })} style={S.input} />
+                  <p style={{ margin: "4px 0 0", fontSize: "10px", color: T.textLight }}>If set, this bill appears on your upcoming bills calendar</p>
+                </div>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <button onClick={handleSubmit} style={S.greenBtn}>{editingId ? "Update" : "Add"}</button>
                   <button onClick={resetForm} style={S.ghostBtn}>Cancel</button>
