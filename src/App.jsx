@@ -940,9 +940,9 @@ export default function BudgetApp() {
                       <div><label style={S.label}>Date column</label><select value={csvState.map.dateIdx} onChange={(e) => setMap("dateIdx", +e.target.value)} style={S.input}>{colOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
                       <div><label style={S.label}>Description</label><select value={csvState.map.descIdx} onChange={(e) => setMap("descIdx", +e.target.value)} style={S.input}>{colOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
-                      <div><label style={S.label}>Amount column</label><select value={csvState.map.amountIdx} onChange={(e) => setMap("amountIdx", +e.target.value)} style={S.input}><option value={-1}>— none (use debit/credit) —</option>{colOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
-                      <div><label style={S.label}>Date format</label><select value={csvState.preferred} onChange={(e) => setCsvState({ ...csvState, preferred: e.target.value })} style={S.input}><option value="DMY">DD/MM/YYYY</option><option value="MDY">MM/DD/YYYY</option></select></div>
+                    <div style={{ marginBottom: "8px" }}>
+                      <label style={S.label}>Amount column</label>
+                      <select value={csvState.map.amountIdx} onChange={(e) => setMap("amountIdx", +e.target.value)} style={S.input}><option value={-1}>— none (use debit/credit) —</option>{colOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
                     </div>
                     {csvState.map.amountIdx < 0 && (
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
