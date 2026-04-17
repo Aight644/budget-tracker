@@ -6,6 +6,7 @@ import { makeFmt } from "./lib/format.js";
 import { parseCSV, detectColumns, rowsToTransactions } from "./lib/csv.js";
 import { detectSubscriptions } from "./lib/subscriptions.js";
 import { computeCoach, generateInsights, scoreLabel } from "./lib/coach.js";
+import { askGemini, buildFinancialContext, getStoredKey, storeKey } from "./lib/ai.js";
 
 export default function BudgetApp() {
   const [items, setItems] = useState([]);
@@ -43,6 +44,13 @@ export default function BudgetApp() {
   const [clearTxnsConfirm, setClearTxnsConfirm] = useState(false);
   const [collapsedMonths, setCollapsedMonths] = useState(new Set());
   const [txnSearch, setTxnSearch] = useState("");
+  const [aiKey, setAiKey] = useState(() => getStoredKey());
+  const [aiKeyDraft, setAiKeyDraft] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState(null);
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const fmt = useMemo(() => makeFmt(currency), [currency]);
 
@@ -191,6 +199,35 @@ export default function BudgetApp() {
     const subs = detectSubscriptions(transactions);
     setDetectedSubs(subs);
     setSelectedSubIds(new Set(subs.map((s) => s.id)));
+  };
+
+  const saveAiKey = () => {
+    const k = aiKeyDraft.trim();
+    storeKey(k);
+    setAiKey(k);
+    setAiKeyDraft("");
+  };
+
+  const sendChatMessage = async () => {
+    const msg = chatInput.trim();
+    if (!msg || chatLoading) return;
+    if (!aiKey) { setChatError("Set your Gemini API key in Settings first."); return; }
+    setChatError(null);
+    const historyForApi = chatMessages.slice();
+    const newUser = { role: "user", text: msg };
+    setChatMessages((p) => [...p, newUser]);
+    setChatInput("");
+    setChatLoading(true);
+    try {
+      const coachData = computeCoach({ items, goals, accounts, transactions, categoryBudgets });
+      const context = buildFinancialContext({ items, goals, accounts, transactions, categoryBudgets, currency }, coachData);
+      const reply = await askGemini({ apiKey: aiKey, context, history: historyForApi, userMessage: msg });
+      setChatMessages((p) => [...p, { role: "assistant", text: reply }]);
+    } catch (e) {
+      setChatError(e.message || "Something went wrong");
+    } finally {
+      setChatLoading(false);
+    }
   };
 
   const updateDetectedSub = (id, patch) => {
@@ -651,6 +688,25 @@ export default function BudgetApp() {
                   {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
                 </select>
               </div>
+              <div style={{ marginBottom: "14px" }}>
+                <label style={S.label}>AI Advisor (optional)</label>
+                {aiKey ? (
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    <span style={{ flex: 1, padding: "8px 10px", background: T.accentBg, border: `1px solid ${T.accentBorder}`, borderRadius: "8px", fontSize: "11px", color: T.accent }}>✓ Gemini key saved · {aiKey.slice(0, 6)}…{aiKey.slice(-4)}</span>
+                    <button onClick={() => { storeKey(""); setAiKey(""); }} style={{ padding: "8px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "8px", color: T.textMuted, fontSize: "11px", cursor: "pointer", fontFamily: "inherit" }}>Remove</button>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <input type={showApiKey ? "text" : "password"} value={aiKeyDraft} onChange={(e) => setAiKeyDraft(e.target.value)} placeholder="Paste Gemini API key..." style={{ ...S.input, flex: 1 }} />
+                      <button onClick={() => setShowApiKey(!showApiKey)} type="button" style={{ padding: "10px 10px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "8px", color: T.textMuted, fontSize: "11px", cursor: "pointer", fontFamily: "inherit" }}>{showApiKey ? "Hide" : "Show"}</button>
+                      <button onClick={saveAiKey} disabled={!aiKeyDraft.trim()} style={{ padding: "10px 14px", background: T.accentBg, border: `1px solid ${T.accentBorder}`, borderRadius: "8px", color: T.accent, fontSize: "11px", fontWeight: "600", cursor: aiKeyDraft.trim() ? "pointer" : "default", fontFamily: "inherit", opacity: aiKeyDraft.trim() ? 1 : 0.5 }}>Save</button>
+                    </div>
+                    <p style={{ margin: "4px 0 0", fontSize: "10px", color: T.textLight }}>Free key: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: T.accent }}>aistudio.google.com/apikey</a>. Stored only on this device.</p>
+                  </>
+                )}
+              </div>
+
               <div style={{ marginBottom: "14px" }}>
                 <button onClick={() => setShowBudgetEditor(!showBudgetEditor)} style={{ width: "100%", padding: "10px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "8px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
                   {showBudgetEditor ? "▾" : "▸"} Monthly category budgets
@@ -1294,6 +1350,48 @@ export default function BudgetApp() {
                   })}
                 </div>
               )}
+
+              <div style={S.card}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                  <h3 style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>AI Advisor</h3>
+                  {aiKey && chatMessages.length > 0 && <button onClick={() => { setChatMessages([]); setChatError(null); }} style={{ background: "none", border: "none", color: T.textLight, fontSize: "11px", cursor: "pointer", fontFamily: "inherit" }}>Clear chat</button>}
+                </div>
+                {!aiKey ? (
+                  <div>
+                    <p style={{ margin: "0 0 8px", fontSize: "12px", color: T.textMuted, lineHeight: 1.5 }}>Chat with an AI advisor about your budget. Uses Google Gemini (free tier) — your data is sent to Google only when you chat.</p>
+                    <p style={{ margin: "0 0 10px", fontSize: "11px", color: T.textLight }}>Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: T.accent }}>aistudio.google.com/apikey</a> → paste it in Settings → come back here.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ maxHeight: "400px", overflowY: "auto", marginBottom: "10px" }}>
+                      {chatMessages.length === 0 && (
+                        <div>
+                          <p style={{ margin: "0 0 10px", fontSize: "12px", color: T.textLight }}>Try asking:</p>
+                          {["How much should I save each month?", "What subscriptions should I cancel?", "How long until I hit my emergency fund goal?", "Am I on track for my goals?"].map((q) => (
+                            <button key={q} onClick={() => setChatInput(q)} style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "8px", color: T.textMuted, fontSize: "12px", cursor: "pointer", fontFamily: "inherit", marginBottom: "6px" }}>{q}</button>
+                          ))}
+                        </div>
+                      )}
+                      {chatMessages.map((m, i) => (
+                        <div key={i} style={{ marginBottom: "10px" }}>
+                          <p style={{ margin: "0 0 4px", fontSize: "10px", color: T.textLight, fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>{m.role === "user" ? "You" : "Coach"}</p>
+                          <div style={{ padding: "10px 12px", background: m.role === "user" ? T.inputBg : T.accentBg, border: `1px solid ${m.role === "user" ? T.inputBorder : T.accentBorder}`, borderRadius: "10px", fontSize: "13px", color: T.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{m.text}</div>
+                        </div>
+                      ))}
+                      {chatLoading && (
+                        <div style={{ padding: "10px 12px", background: T.accentBg, border: `1px solid ${T.accentBorder}`, borderRadius: "10px", fontSize: "12px", color: T.textLight, fontStyle: "italic" }}>thinking…</div>
+                      )}
+                    </div>
+                    {chatError && (
+                      <p style={{ margin: "0 0 8px", padding: "8px 10px", background: T.dangerBg, border: `1px solid ${T.dangerBorder}`, borderRadius: "8px", fontSize: "11px", color: T.danger }}>{chatError}</p>
+                    )}
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }} placeholder="Ask about your budget…" disabled={chatLoading} style={{ ...S.input, flex: 1 }} />
+                      <button onClick={sendChatMessage} disabled={chatLoading || !chatInput.trim()} style={{ padding: "10px 16px", background: "linear-gradient(135deg, #16a34a, #15803d)", border: "none", borderRadius: "8px", color: "#fff", fontSize: "13px", fontWeight: "600", cursor: chatLoading || !chatInput.trim() ? "default" : "pointer", fontFamily: "inherit", opacity: chatLoading || !chatInput.trim() ? 0.5 : 1 }}>Send</button>
+                    </div>
+                  </>
+                )}
+              </div>
 
               <p style={{ fontSize: "10px", color: T.textLight, textAlign: "center", padding: "8px 16px", lineHeight: 1.5 }}>This is educational guidance, not professional financial advice. Consider consulting a financial advisor for major decisions.</p>
             </>
