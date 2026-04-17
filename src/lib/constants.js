@@ -15,6 +15,26 @@ export const CATEGORIES = [
   { id: "other", label: "Other", icon: "●", color: "#dc2626" },
 ];
 
+export const CURRENCIES = [
+  { code: "AUD", label: "Australian Dollar (A$)", locale: "en-AU" },
+  { code: "USD", label: "US Dollar ($)", locale: "en-US" },
+  { code: "EUR", label: "Euro (€)", locale: "en-IE" },
+  { code: "GBP", label: "British Pound (£)", locale: "en-GB" },
+  { code: "CAD", label: "Canadian Dollar (C$)", locale: "en-CA" },
+  { code: "NZD", label: "New Zealand Dollar (NZ$)", locale: "en-NZ" },
+  { code: "JPY", label: "Japanese Yen (¥)", locale: "ja-JP" },
+  { code: "INR", label: "Indian Rupee (₹)", locale: "en-IN" },
+  { code: "CHF", label: "Swiss Franc (CHF)", locale: "de-CH" },
+  { code: "SGD", label: "Singapore Dollar (S$)", locale: "en-SG" },
+  { code: "ZAR", label: "South African Rand (R)", locale: "en-ZA" },
+  { code: "HKD", label: "Hong Kong Dollar (HK$)", locale: "en-HK" },
+  { code: "CNY", label: "Chinese Yuan (¥)", locale: "zh-CN" },
+  { code: "MXN", label: "Mexican Peso ($)", locale: "es-MX" },
+  { code: "BRL", label: "Brazilian Real (R$)", locale: "pt-BR" },
+];
+
+export const DEFAULT_CURRENCY = "AUD";
+
 export const FREQUENCIES = [
   { id: "weekly", label: "Weekly", multiplier: 52 },
   { id: "fortnightly", label: "Fortnightly", multiplier: 26 },

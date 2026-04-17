@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { SCHEMA_VERSION, CATEGORIES, FREQUENCIES } from "./lib/constants.js";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { SCHEMA_VERSION, CATEGORIES, FREQUENCIES, CURRENCIES, DEFAULT_CURRENCY } from "./lib/constants.js";
 import { loadStored, saveStored, clearStored } from "./lib/storage.js";
 import { toYr, convertBy } from "./lib/calc.js";
-import { fmt } from "./lib/format.js";
+import { makeFmt } from "./lib/format.js";
 
 export default function BudgetApp() {
   const [items, setItems] = useState([]);
@@ -19,6 +19,8 @@ export default function BudgetApp() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleteGoalConfirm, setDeleteGoalConfirm] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
+  const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
+  const fmt = useMemo(() => makeFmt(currency), [currency]);
 
   const [saveError, setSaveError] = useState(null);
   const [clearConfirm, setClearConfirm] = useState(false);
@@ -32,18 +34,19 @@ export default function BudgetApp() {
       if (Array.isArray(d.goals)) setGoals(d.goals);
       if (d.view) setView(d.view);
       if (d.darkMode !== undefined) setDarkMode(d.darkMode);
+      if (d.currency && CURRENCIES.some((c) => c.code === d.currency)) setCurrency(d.currency);
     }
     setLoaded(true);
   }, []);
 
   useEffect(() => {
     if (!loaded) return;
-    const r = saveStored({ items, goals, view, darkMode });
+    const r = saveStored({ items, goals, view, darkMode, currency });
     setSaveError(r.ok ? null : r.error);
-  }, [items, goals, view, darkMode, loaded]);
+  }, [items, goals, view, darkMode, currency, loaded]);
 
   const handleExport = () => {
-    const payload = { version: SCHEMA_VERSION, exportedAt: new Date().toISOString(), items, goals, view, darkMode };
+    const payload = { version: SCHEMA_VERSION, exportedAt: new Date().toISOString(), items, goals, view, darkMode, currency };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -67,6 +70,7 @@ export default function BudgetApp() {
         if (Array.isArray(d.goals)) setGoals(d.goals);
         if (d.view) setView(d.view);
         if (d.darkMode !== undefined) setDarkMode(d.darkMode);
+        if (d.currency && CURRENCIES.some((c) => c.code === d.currency)) setCurrency(d.currency);
         setImportMsg({ type: "ok", text: `Imported ${(d.items || []).length} items, ${(d.goals || []).length} goals` });
       } catch (err) {
         setImportMsg({ type: "err", text: `Import failed: ${err.message}` });
@@ -335,10 +339,22 @@ export default function BudgetApp() {
               </div>
             </div>
 
+          </>
+        ))}
+
+        {activeTab === "dashboard" && (
+          <>
             <div style={S.card}>
-              <h3 style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>Backup & Data</h3>
-              <p style={{ margin: "0 0 12px", fontSize: "11px", color: T.textLight }}>Your data is saved in this browser only. Export regularly to keep a backup.</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+              <h3 style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>Settings</h3>
+              <div style={{ marginBottom: "14px" }}>
+                <label style={S.label}>Currency</label>
+                <select value={currency} onChange={(e) => setCurrency(e.target.value)} style={S.input}>
+                  {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+                </select>
+              </div>
+              <p style={{ margin: "0 0 8px", fontSize: "11px", color: T.textLight, fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.3px" }}>Backup</p>
+              <p style={{ margin: "0 0 10px", fontSize: "11px", color: T.textLight }}>Your data is saved in this browser only. Export regularly.</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
                 <button onClick={handleExport} style={{ padding: "10px", background: T.accentBg, border: `1px solid ${T.accentBorder}`, borderRadius: "10px", color: T.accent, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>↓ Export backup</button>
                 <button onClick={() => fileInputRef.current?.click()} style={{ padding: "10px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>↑ Import backup</button>
                 <input ref={fileInputRef} type="file" accept="application/json,.json" onChange={handleImport} style={{ display: "none" }} />
@@ -347,16 +363,16 @@ export default function BudgetApp() {
               {saveError && <p style={{ margin: "8px 0 0", fontSize: "11px", color: T.danger }}>⚠ Save failed: {saveError}. Export a backup now.</p>}
             </div>
 
-            {clearConfirm ? (
+            {(items.length > 0 || goals.length > 0) && (clearConfirm ? (
               <div style={{ display: "flex", gap: "8px" }}>
                 <button onClick={() => { setItems([]); setGoals([]); clearStored(); setClearConfirm(false); }} style={{ flex: 1, padding: "12px", background: T.dangerBg, border: `1px solid ${T.dangerBorder}`, borderRadius: "10px", color: T.danger, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Yes, erase everything</button>
                 <button onClick={() => setClearConfirm(false)} style={{ flex: 1, padding: "12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
               </div>
             ) : (
               <button onClick={() => setClearConfirm(true)} style={{ width: "100%", padding: "12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px", color: T.textLight, fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>Clear All Data</button>
-            )}
+            ))}
           </>
-        ))}
+        )}
 
         {/* ITEMS TAB */}
         {activeTab === "items" && (
