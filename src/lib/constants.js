@@ -35,6 +35,15 @@ export const CURRENCIES = [
 
 export const DEFAULT_CURRENCY = "AUD";
 
+export const ACCOUNT_TYPES = [
+  { id: "checking", label: "Checking", icon: "◎", isLiability: false, color: "#2563eb" },
+  { id: "savings", label: "Savings", icon: "◆", isLiability: false, color: "#16a34a" },
+  { id: "cash", label: "Cash", icon: "$", isLiability: false, color: "#059669" },
+  { id: "investment", label: "Investment", icon: "↗", isLiability: false, color: "#7c3aed" },
+  { id: "credit", label: "Credit Card", icon: "▤", isLiability: true, color: "#dc2626" },
+  { id: "loan", label: "Loan", icon: "▼", isLiability: true, color: "#ea580c" },
+];
+
 export const FREQUENCIES = [
   { id: "weekly", label: "Weekly", multiplier: 52 },
   { id: "fortnightly", label: "Fortnightly", multiplier: 26 },

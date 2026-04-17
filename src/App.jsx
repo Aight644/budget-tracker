@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { SCHEMA_VERSION, CATEGORIES, FREQUENCIES, CURRENCIES, DEFAULT_CURRENCY } from "./lib/constants.js";
+import { SCHEMA_VERSION, CATEGORIES, FREQUENCIES, CURRENCIES, DEFAULT_CURRENCY, ACCOUNT_TYPES } from "./lib/constants.js";
 import { loadStored, saveStored, clearStored } from "./lib/storage.js";
 import { toYr, convertBy } from "./lib/calc.js";
 import { makeFmt } from "./lib/format.js";
@@ -19,6 +19,11 @@ export default function BudgetApp() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleteGoalConfirm, setDeleteGoalConfirm] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
+  const [accounts, setAccounts] = useState([]);
+  const [showAccountForm, setShowAccountForm] = useState(false);
+  const [editingAccountId, setEditingAccountId] = useState(null);
+  const [accountFormData, setAccountFormData] = useState({ name: "", type: "checking", balance: "", color: "#2563eb", includeInNetWorth: true });
+  const [deleteAccountConfirm, setDeleteAccountConfirm] = useState(null);
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const fmt = useMemo(() => makeFmt(currency), [currency]);
 
@@ -32,6 +37,7 @@ export default function BudgetApp() {
     if (d) {
       if (Array.isArray(d.items)) setItems(d.items);
       if (Array.isArray(d.goals)) setGoals(d.goals);
+      if (Array.isArray(d.accounts)) setAccounts(d.accounts);
       if (d.view) setView(d.view);
       if (d.darkMode !== undefined) setDarkMode(d.darkMode);
       if (d.currency && CURRENCIES.some((c) => c.code === d.currency)) setCurrency(d.currency);
@@ -41,12 +47,12 @@ export default function BudgetApp() {
 
   useEffect(() => {
     if (!loaded) return;
-    const r = saveStored({ items, goals, view, darkMode, currency });
+    const r = saveStored({ items, goals, accounts, view, darkMode, currency });
     setSaveError(r.ok ? null : r.error);
-  }, [items, goals, view, darkMode, currency, loaded]);
+  }, [items, goals, accounts, view, darkMode, currency, loaded]);
 
   const handleExport = () => {
-    const payload = { version: SCHEMA_VERSION, exportedAt: new Date().toISOString(), items, goals, view, darkMode, currency };
+    const payload = { version: SCHEMA_VERSION, exportedAt: new Date().toISOString(), items, goals, accounts, view, darkMode, currency };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -65,13 +71,14 @@ export default function BudgetApp() {
     reader.onload = (ev) => {
       try {
         const d = JSON.parse(ev.target.result);
-        if (!Array.isArray(d.items) && !Array.isArray(d.goals)) throw new Error("Not a valid backup file");
+        if (!Array.isArray(d.items) && !Array.isArray(d.goals) && !Array.isArray(d.accounts)) throw new Error("Not a valid backup file");
         if (Array.isArray(d.items)) setItems(d.items);
         if (Array.isArray(d.goals)) setGoals(d.goals);
+        if (Array.isArray(d.accounts)) setAccounts(d.accounts);
         if (d.view) setView(d.view);
         if (d.darkMode !== undefined) setDarkMode(d.darkMode);
         if (d.currency && CURRENCIES.some((c) => c.code === d.currency)) setCurrency(d.currency);
-        setImportMsg({ type: "ok", text: `Imported ${(d.items || []).length} items, ${(d.goals || []).length} goals` });
+        setImportMsg({ type: "ok", text: `Imported ${(d.items || []).length} items, ${(d.goals || []).length} goals, ${(d.accounts || []).length} accounts` });
       } catch (err) {
         setImportMsg({ type: "err", text: `Import failed: ${err.message}` });
       }
@@ -92,6 +99,37 @@ export default function BudgetApp() {
 
   const resetForm = () => { setFormData({ name: "", amount: "", frequency: "monthly", category: "other", isIncome: false }); setEditingId(null); setShowForm(false); };
   const resetGoalForm = () => { setGoalFormData({ name: "", target: "", saved: "0", monthlySaving: "", deadline: "", color: "#16a34a" }); setEditingGoalId(null); setShowGoalForm(false); };
+  const resetAccountForm = () => { setAccountFormData({ name: "", type: "checking", balance: "", color: "#2563eb", includeInNetWorth: true }); setEditingAccountId(null); setShowAccountForm(false); };
+
+  const handleAccountSubmit = () => {
+    if (!accountFormData.name.trim()) return;
+    const bal = parseFloat(accountFormData.balance);
+    if (!isFinite(bal)) return;
+    const clean = { ...accountFormData, name: accountFormData.name.trim(), balance: bal };
+    if (editingAccountId) setAccounts(p => p.map(a => a.id === editingAccountId ? { ...a, ...clean } : a));
+    else setAccounts(p => [...p, { ...clean, id: Date.now().toString() }]);
+    resetAccountForm();
+  };
+
+  const startEditAccount = (a) => {
+    setAccountFormData({ name: a.name, type: a.type, balance: a.balance.toString(), color: a.color || "#2563eb", includeInNetWorth: a.includeInNetWorth !== false });
+    setEditingAccountId(a.id);
+    setShowAccountForm(true);
+  };
+
+  const netWorth = accounts.filter(a => a.includeInNetWorth !== false).reduce((s, a) => {
+    const t = ACCOUNT_TYPES.find(t => t.id === a.type);
+    const sign = t && t.isLiability ? -1 : 1;
+    return s + (a.balance || 0) * sign;
+  }, 0);
+  const totalAssets = accounts.filter(a => a.includeInNetWorth !== false).reduce((s, a) => {
+    const t = ACCOUNT_TYPES.find(t => t.id === a.type);
+    return s + (t && !t.isLiability ? (a.balance || 0) : 0);
+  }, 0);
+  const totalLiabilities = accounts.filter(a => a.includeInNetWorth !== false).reduce((s, a) => {
+    const t = ACCOUNT_TYPES.find(t => t.id === a.type);
+    return s + (t && t.isLiability ? (a.balance || 0) : 0);
+  }, 0);
 
   const handleSubmit = () => {
     if (!formData.name.trim() || !formData.amount) return;
@@ -216,14 +254,30 @@ export default function BudgetApp() {
 
       {/* TABS */}
       <div style={{ display: "flex", borderBottom: `1px solid ${T.tabBorder}`, background: T.headerBg }}>
-        {["dashboard", "items", "goals"].map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)} style={{ flex: 1, padding: "12px", border: "none", borderBottom: activeTab === tab ? `2px solid ${T.accent}` : "2px solid transparent", fontSize: "13px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", background: "transparent", color: activeTab === tab ? T.accent : T.textLight }}>{tab === "dashboard" ? "Overview" : tab === "items" ? "Items" : "Goals"}</button>
+        {[
+          { id: "dashboard", label: "Overview" },
+          { id: "items", label: "Budget" },
+          { id: "accounts", label: "Accounts" },
+          { id: "goals", label: "Goals" },
+        ].map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ flex: 1, padding: "12px 6px", border: "none", borderBottom: activeTab === tab.id ? `2px solid ${T.accent}` : "2px solid transparent", fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", background: "transparent", color: activeTab === tab.id ? T.accent : T.textLight }}>{tab.label}</button>
         ))}
       </div>
 
       <div style={{ padding: "16px 20px 120px" }}>
 
         {/* DASHBOARD */}
+        {activeTab === "dashboard" && accounts.length > 0 && (
+          <div style={{ background: netWorth >= 0 ? T.accentBg : T.dangerBg, border: `1px solid ${netWorth >= 0 ? T.accentBorder : T.dangerBorder}`, borderRadius: "14px", padding: "20px", marginBottom: "16px", textAlign: "center" }}>
+            <p style={{ margin: 0, fontSize: "11px", color: T.textMuted, fontWeight: "600", textTransform: "uppercase", letterSpacing: "1px" }}>Net Worth</p>
+            <p style={{ margin: "8px 0 0", fontSize: "32px", ...S.mono, color: netWorth >= 0 ? T.accent : T.danger, letterSpacing: "-1px" }}>{fmt(netWorth)}</p>
+            <div style={{ display: "flex", justifyContent: "center", gap: "16px", marginTop: "10px", fontSize: "11px", color: T.textLight }}>
+              <span>Assets: <span style={{ ...S.mono, color: T.accent }}>{fmt(totalAssets)}</span></span>
+              <span>Debt: <span style={{ ...S.mono, color: T.danger }}>{fmt(totalLiabilities)}</span></span>
+            </div>
+          </div>
+        )}
+
         {activeTab === "dashboard" && (items.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 20px", color: T.textLight }}>
             <p style={{ fontSize: "40px", margin: "0 0 12px", opacity: 0.4 }}>◆</p>
@@ -447,6 +501,88 @@ export default function BudgetApp() {
                 </div>
               </div>
             ))}
+          </>
+        )}
+
+        {/* ACCOUNTS TAB */}
+        {activeTab === "accounts" && (
+          <>
+            {showAccountForm && (
+              <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "14px", padding: "16px", marginBottom: "16px", boxShadow: T.cardShadow }}>
+                <h3 style={{ margin: "0 0 14px", fontSize: "14px", fontWeight: "600" }}>{editingAccountId ? "Edit Account" : "Add Account"}</h3>
+                <div style={{ marginBottom: "10px" }}>
+                  <label style={S.label}>Name</label>
+                  <input type="text" value={accountFormData.name} onChange={e => setAccountFormData({ ...accountFormData, name: e.target.value })} placeholder="e.g. Main Checking, Emergency Savings..." style={S.input} />
+                </div>
+                <div style={{ marginBottom: "10px" }}>
+                  <label style={S.label}>Type</label>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px" }}>
+                    {ACCOUNT_TYPES.map(t => (
+                      <button key={t.id} onClick={() => setAccountFormData({ ...accountFormData, type: t.id, color: t.color })} style={{ padding: "10px 6px", border: accountFormData.type === t.id ? `2px solid ${t.color}` : `1px solid ${T.inputBorder}`, borderRadius: "8px", background: accountFormData.type === t.id ? `${t.color}10` : T.catBtnBg, color: accountFormData.type === t.id ? t.color : T.textMuted, fontSize: "11px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>{t.icon} {t.label}</button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ marginBottom: "10px" }}>
+                  <label style={S.label}>Current Balance</label>
+                  <input type="number" value={accountFormData.balance} onChange={e => setAccountFormData({ ...accountFormData, balance: e.target.value })} placeholder="0.00" style={S.input} />
+                  {ACCOUNT_TYPES.find(t => t.id === accountFormData.type)?.isLiability && <p style={{ margin: "4px 0 0", fontSize: "10px", color: T.textLight }}>Enter the amount owed as a positive number</p>}
+                </div>
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12px", color: T.textMuted }}>
+                    <input type="checkbox" checked={accountFormData.includeInNetWorth} onChange={e => setAccountFormData({ ...accountFormData, includeInNetWorth: e.target.checked })} />
+                    Include in net worth
+                  </label>
+                </div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button onClick={handleAccountSubmit} style={S.greenBtn}>{editingAccountId ? "Update" : "Add"}</button>
+                  <button onClick={resetAccountForm} style={S.ghostBtn}>Cancel</button>
+                </div>
+              </div>
+            )}
+            {!showAccountForm && <button onClick={() => { resetAccountForm(); setShowAccountForm(true); }} style={{ width: "100%", padding: "14px", marginBottom: "16px", background: T.accentBg, border: `1px dashed ${T.accentBorder}`, borderRadius: "12px", color: T.accent, fontSize: "14px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>+ Add Account</button>}
+
+            {accounts.length === 0 && !showAccountForm && (
+              <div style={{ textAlign: "center", padding: "40px 20px", color: T.textLight }}>
+                <p style={{ fontSize: "40px", margin: "0 0 12px", opacity: 0.3 }}>◎</p>
+                <p style={{ fontSize: "14px", fontWeight: "600", color: T.textMuted, margin: "0 0 8px" }}>No accounts yet</p>
+                <p style={{ fontSize: "13px" }}>Track checking, savings, credit cards, loans — everything that affects your net worth</p>
+              </div>
+            )}
+
+            {accounts.length > 0 && (
+              <div style={{ background: netWorth >= 0 ? T.accentBg : T.dangerBg, border: `1px solid ${netWorth >= 0 ? T.accentBorder : T.dangerBorder}`, borderRadius: "14px", padding: "16px", marginBottom: "16px", textAlign: "center" }}>
+                <p style={{ margin: 0, fontSize: "11px", color: T.textMuted, fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>Net Worth</p>
+                <p style={{ margin: "6px 0 0", fontSize: "26px", ...S.mono, color: netWorth >= 0 ? T.accent : T.danger }}>{fmt(netWorth)}</p>
+                <p style={{ margin: "4px 0 0", fontSize: "10px", color: T.textLight }}>{fmt(totalAssets)} assets − {fmt(totalLiabilities)} debt</p>
+              </div>
+            )}
+
+            {ACCOUNT_TYPES.map(type => {
+              const list = accounts.filter(a => a.type === type.id);
+              if (list.length === 0) return null;
+              const subtotal = list.reduce((s, a) => s + (a.balance || 0), 0);
+              return (
+                <div key={type.id} style={{ marginBottom: "12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px", padding: "6px 0" }}>
+                    <span style={{ color: type.color, fontSize: "12px" }}>{type.icon}</span>
+                    <span style={{ fontSize: "12px", fontWeight: "600", color: type.color }}>{type.label}</span>
+                    <span style={{ fontSize: "11px", color: T.textLight, marginLeft: "auto", ...S.mono }}>{fmt(subtotal)}</span>
+                  </div>
+                  {list.map(a => (
+                    <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "10px", marginBottom: "6px", boxShadow: T.cardShadow }}>
+                      <div onClick={() => startEditAccount(a)} style={{ cursor: "pointer", flex: 1 }}>
+                        <p style={{ margin: 0, fontSize: "13px", fontWeight: "500" }}>{a.name}</p>
+                        {a.includeInNetWorth === false && <p style={{ margin: "2px 0 0", fontSize: "10px", color: T.textLight }}>Excluded from net worth</p>}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <span style={{ fontSize: "14px", ...S.mono, color: type.isLiability ? T.danger : T.accent }}>{type.isLiability ? "-" : ""}{fmt(a.balance || 0)}</span>
+                        <DelBtn id={a.id} onDel={id => { setAccounts(p => p.filter(x => x.id !== id)); setDeleteAccountConfirm(null); }} confirm={deleteAccountConfirm} setConfirm={setDeleteAccountConfirm} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </>
         )}
 
