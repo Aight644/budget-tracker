@@ -1,58 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-
-const SCHEMA_VERSION = 4;
-const STORAGE_KEY = "budget-app-v4";
-const LEGACY_KEY = "budget-app-v3";
-const BACKUP_KEY = "budget-app-v4-prev";
-
-function loadStored() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-    const legacy = localStorage.getItem(LEGACY_KEY);
-    if (legacy) {
-      const d = JSON.parse(legacy);
-      return { version: SCHEMA_VERSION, ...d };
-    }
-  } catch (e) {}
-  return null;
-}
-
-function saveStored(data) {
-  try {
-    const current = localStorage.getItem(STORAGE_KEY);
-    if (current) localStorage.setItem(BACKUP_KEY, current);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: SCHEMA_VERSION, ...data }));
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e.message || "Failed to save" };
-  }
-}
-
-const CATEGORIES = [
-  { id: "income", label: "Income", icon: "↑", color: "#16a34a" },
-  { id: "housing", label: "Housing", icon: "⌂", color: "#d97706" },
-  { id: "transport", label: "Transport", icon: "⚡", color: "#2563eb" },
-  { id: "subscriptions", label: "Subscriptions", icon: "♫", color: "#7c3aed" },
-  { id: "utilities", label: "Utilities", icon: "◎", color: "#0891b2" },
-  { id: "food", label: "Food & Groceries", icon: "✦", color: "#ea580c" },
-  { id: "savings", label: "Savings", icon: "◆", color: "#059669" },
-  { id: "personal", label: "Personal", icon: "★", color: "#db2777" },
-  { id: "other", label: "Other", icon: "●", color: "#dc2626" },
-];
-
-const FREQUENCIES = [
-  { id: "weekly", label: "Weekly", multiplier: 52 },
-  { id: "fortnightly", label: "Fortnightly", multiplier: 26 },
-  { id: "monthly", label: "Monthly", multiplier: 12 },
-  { id: "quarterly", label: "Quarterly", multiplier: 4 },
-  { id: "yearly", label: "Yearly", multiplier: 1 },
-];
-
-const toFn = (a, f) => { const x = FREQUENCIES.find(v => v.id === f); return x ? (a * x.multiplier) / 26 : 0; };
-const toMo = (a, f) => { const x = FREQUENCIES.find(v => v.id === f); return x ? (a * x.multiplier) / 12 : 0; };
-const toYr = (a, f) => { const x = FREQUENCIES.find(v => v.id === f); return x ? a * x.multiplier : 0; };
-const fmt = (n) => new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", minimumFractionDigits: 2 }).format(n);
+import { SCHEMA_VERSION, CATEGORIES, FREQUENCIES } from "./lib/constants.js";
+import { loadStored, saveStored, clearStored } from "./lib/storage.js";
+import { toYr, convertBy } from "./lib/calc.js";
+import { fmt } from "./lib/format.js";
 
 export default function BudgetApp() {
   const [items, setItems] = useState([]);
@@ -127,7 +77,7 @@ export default function BudgetApp() {
     reader.readAsText(file);
   };
 
-  const convert = useCallback((a, f) => view === "fortnightly" ? toFn(a, f) : view === "monthly" ? toMo(a, f) : toYr(a, f), [view]);
+  const convert = useCallback(convertBy(view), [view]);
 
   const incomeItems = items.filter(i => i.isIncome);
   const expenseItems = items.filter(i => !i.isIncome);
@@ -399,7 +349,7 @@ export default function BudgetApp() {
 
             {clearConfirm ? (
               <div style={{ display: "flex", gap: "8px" }}>
-                <button onClick={() => { setItems([]); setGoals([]); try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(LEGACY_KEY); } catch(e){} setClearConfirm(false); }} style={{ flex: 1, padding: "12px", background: T.dangerBg, border: `1px solid ${T.dangerBorder}`, borderRadius: "10px", color: T.danger, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Yes, erase everything</button>
+                <button onClick={() => { setItems([]); setGoals([]); clearStored(); setClearConfirm(false); }} style={{ flex: 1, padding: "12px", background: T.dangerBg, border: `1px solid ${T.dangerBorder}`, borderRadius: "10px", color: T.danger, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Yes, erase everything</button>
                 <button onClick={() => setClearConfirm(false)} style={{ flex: 1, padding: "12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
               </div>
             ) : (
