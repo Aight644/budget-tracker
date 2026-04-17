@@ -3,6 +3,8 @@ import { SCHEMA_VERSION, CATEGORIES, FREQUENCIES, CURRENCIES, DEFAULT_CURRENCY, 
 import { loadStored, saveStored, clearStored } from "./lib/storage.js";
 import { toYr, convertBy } from "./lib/calc.js";
 import { makeFmt } from "./lib/format.js";
+import { parseCSV, detectColumns, rowsToTransactions } from "./lib/csv.js";
+import { detectSubscriptions } from "./lib/subscriptions.js";
 
 export default function BudgetApp() {
   const [items, setItems] = useState([]);
@@ -31,6 +33,10 @@ export default function BudgetApp() {
   const [deleteTxnConfirm, setDeleteTxnConfirm] = useState(null);
   const [txnFilterAccount, setTxnFilterAccount] = useState("all");
   const [txnFilterCategory, setTxnFilterCategory] = useState("all");
+  const [csvState, setCsvState] = useState(null);
+  const [detectedSubs, setDetectedSubs] = useState(null);
+  const [selectedSubIds, setSelectedSubIds] = useState(new Set());
+  const csvFileRef = useRef(null);
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const fmt = useMemo(() => makeFmt(currency), [currency]);
 
@@ -127,6 +133,78 @@ export default function BudgetApp() {
   };
 
   const resetTxnForm = () => { setTxnFormData({ accountId: accounts[0]?.id || "", amount: "", category: "other", date: new Date().toISOString().slice(0, 10), note: "", isIncome: false }); setEditingTxnId(null); setShowTxnForm(false); };
+
+  const handleCsvFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const rows = parseCSV(ev.target.result);
+        if (rows.length < 2) throw new Error("CSV has no data rows");
+        const preferred = "DMY";
+        const map = detectColumns(rows, preferred);
+        setCsvState({ rows, map, preferred, accountId: accounts[0]?.id || "", fileName: file.name });
+      } catch (err) {
+        setImportMsg({ type: "err", text: `CSV parse failed: ${err.message}` });
+        setTimeout(() => setImportMsg(null), 4000);
+      }
+      if (csvFileRef.current) csvFileRef.current.value = "";
+    };
+    reader.readAsText(file);
+  };
+
+  const csvImport = () => {
+    if (!csvState) return;
+    const txns = rowsToTransactions(csvState.rows, csvState.map, csvState.preferred).map((t) => ({
+      ...t,
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      accountId: csvState.accountId,
+      category: t.isIncome ? "income" : "other",
+    }));
+    if (txns.length === 0) {
+      setImportMsg({ type: "err", text: "No valid rows found — check column mapping" });
+      setTimeout(() => setImportMsg(null), 4000);
+      return;
+    }
+    setTransactions((p) => [...p, ...txns]);
+    setImportMsg({ type: "ok", text: `Imported ${txns.length} transactions` });
+    setTimeout(() => setImportMsg(null), 4000);
+    setCsvState(null);
+    const all = [...transactions, ...txns];
+    const subs = detectSubscriptions(all);
+    if (subs.length > 0) {
+      setDetectedSubs(subs);
+      setSelectedSubIds(new Set(subs.map((s) => s.id)));
+    }
+  };
+
+  const runDetectSubs = () => {
+    const subs = detectSubscriptions(transactions);
+    setDetectedSubs(subs);
+    setSelectedSubIds(new Set(subs.map((s) => s.id)));
+  };
+
+  const addSelectedSubs = () => {
+    if (!detectedSubs) return;
+    const existing = new Set(items.map((i) => (i.name || "").toLowerCase()));
+    const toAdd = detectedSubs
+      .filter((s) => selectedSubIds.has(s.id))
+      .filter((s) => !existing.has(s.displayName.toLowerCase()))
+      .map((s) => ({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: s.displayName,
+        amount: s.amount,
+        frequency: s.frequency,
+        category: s.category,
+        isIncome: false,
+      }));
+    if (toAdd.length > 0) setItems((p) => [...p, ...toAdd]);
+    setImportMsg({ type: "ok", text: `Added ${toAdd.length} recurring items to Budget` });
+    setTimeout(() => setImportMsg(null), 4000);
+    setDetectedSubs(null);
+    setSelectedSubIds(new Set());
+  };
 
   const handleTxnSubmit = () => {
     if (!txnFormData.amount || !txnFormData.date) return;
@@ -699,7 +777,109 @@ export default function BudgetApp() {
                   </div>
                 </div>
               )}
-              {!showTxnForm && <button onClick={() => { resetTxnForm(); setShowTxnForm(true); }} style={{ width: "100%", padding: "14px", marginBottom: "16px", background: T.accentBg, border: `1px dashed ${T.accentBorder}`, borderRadius: "12px", color: T.accent, fontSize: "14px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>+ Add Transaction</button>}
+              {!showTxnForm && !csvState && !detectedSubs && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
+                  <button onClick={() => { resetTxnForm(); setShowTxnForm(true); }} style={{ padding: "14px", background: T.accentBg, border: `1px dashed ${T.accentBorder}`, borderRadius: "12px", color: T.accent, fontSize: "13px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>+ Add</button>
+                  <button onClick={() => csvFileRef.current?.click()} style={{ padding: "14px", background: T.inputBg, border: `1px dashed ${T.inputBorder}`, borderRadius: "12px", color: T.textMuted, fontSize: "13px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>↑ Import CSV</button>
+                  <input ref={csvFileRef} type="file" accept=".csv,text/csv" onChange={handleCsvFile} style={{ display: "none" }} />
+                </div>
+              )}
+
+              {transactions.length >= 3 && !csvState && !detectedSubs && !showTxnForm && (
+                <button onClick={runDetectSubs} style={{ width: "100%", padding: "12px", marginBottom: "16px", background: "transparent", border: `1px solid ${T.inputBorder}`, borderRadius: "10px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>✨ Detect subscriptions from activity</button>
+              )}
+
+              {csvState && (() => {
+                const preview = rowsToTransactions(csvState.rows, csvState.map, csvState.preferred).slice(0, 10);
+                const totalCount = rowsToTransactions(csvState.rows, csvState.map, csvState.preferred).length;
+                const colOptions = csvState.rows[0].map((h, i) => ({ value: i, label: `${i + 1}: ${h || "(unnamed)"}` }));
+                const setMap = (k, v) => setCsvState({ ...csvState, map: { ...csvState.map, [k]: v } });
+                return (
+                  <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "14px", padding: "16px", marginBottom: "16px", boxShadow: T.cardShadow }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                      <h3 style={{ margin: 0, fontSize: "14px", fontWeight: "600" }}>Import CSV</h3>
+                      <button onClick={() => setCsvState(null)} style={{ background: "none", border: "none", color: T.textLight, fontSize: "18px", cursor: "pointer" }}>×</button>
+                    </div>
+                    <p style={{ margin: "0 0 12px", fontSize: "11px", color: T.textLight }}>File: {csvState.fileName} · {csvState.rows.length - 1} rows</p>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+                      <div><label style={S.label}>Date column</label><select value={csvState.map.dateIdx} onChange={(e) => setMap("dateIdx", +e.target.value)} style={S.input}>{colOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+                      <div><label style={S.label}>Description</label><select value={csvState.map.descIdx} onChange={(e) => setMap("descIdx", +e.target.value)} style={S.input}>{colOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+                      <div><label style={S.label}>Amount column</label><select value={csvState.map.amountIdx} onChange={(e) => setMap("amountIdx", +e.target.value)} style={S.input}><option value={-1}>— none (use debit/credit) —</option>{colOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+                      <div><label style={S.label}>Date format</label><select value={csvState.preferred} onChange={(e) => setCsvState({ ...csvState, preferred: e.target.value })} style={S.input}><option value="DMY">DD/MM/YYYY</option><option value="MDY">MM/DD/YYYY</option></select></div>
+                    </div>
+                    {csvState.map.amountIdx < 0 && (
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+                        <div><label style={S.label}>Debit (out)</label><select value={csvState.map.debitIdx} onChange={(e) => setMap("debitIdx", +e.target.value)} style={S.input}><option value={-1}>—</option>{colOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+                        <div><label style={S.label}>Credit (in)</label><select value={csvState.map.creditIdx} onChange={(e) => setMap("creditIdx", +e.target.value)} style={S.input}><option value={-1}>—</option>{colOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+                      </div>
+                    )}
+                    <div style={{ marginBottom: "12px" }}>
+                      <label style={S.label}>Import to account</label>
+                      <select value={csvState.accountId} onChange={(e) => setCsvState({ ...csvState, accountId: e.target.value })} style={S.input}>
+                        <option value="">— No account —</option>
+                        {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      </select>
+                    </div>
+                    <p style={{ margin: "0 0 6px", fontSize: "11px", color: T.textLight, fontWeight: "600", textTransform: "uppercase" }}>Preview — first 10 rows · {totalCount} total</p>
+                    <div style={{ maxHeight: "200px", overflowY: "auto", border: `1px solid ${T.inputBorder}`, borderRadius: "8px", marginBottom: "12px" }}>
+                      {preview.length === 0 ? (
+                        <p style={{ padding: "10px", margin: 0, fontSize: "12px", color: T.danger }}>No rows parsed — try different columns or date format</p>
+                      ) : preview.map((t, i) => (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", borderBottom: i < preview.length - 1 ? `1px solid ${T.inputBorder}` : "none", fontSize: "11px" }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.note}</p>
+                            <p style={{ margin: "1px 0 0", color: T.textLight, fontSize: "10px" }}>{t.date}</p>
+                          </div>
+                          <span style={{ ...S.mono, color: t.isIncome ? T.accent : T.danger }}>{t.isIncome ? "+" : "-"}{fmt(t.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button onClick={csvImport} disabled={totalCount === 0} style={{ ...S.greenBtn, opacity: totalCount === 0 ? 0.5 : 1 }}>Import {totalCount} transactions</button>
+                      <button onClick={() => setCsvState(null)} style={S.ghostBtn}>Cancel</button>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {detectedSubs && (
+                <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "14px", padding: "16px", marginBottom: "16px", boxShadow: T.cardShadow }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                    <h3 style={{ margin: 0, fontSize: "14px", fontWeight: "600" }}>✨ Detected subscriptions</h3>
+                    <button onClick={() => setDetectedSubs(null)} style={{ background: "none", border: "none", color: T.textLight, fontSize: "18px", cursor: "pointer" }}>×</button>
+                  </div>
+                  {detectedSubs.length === 0 ? (
+                    <p style={{ margin: "0 0 12px", fontSize: "12px", color: T.textLight }}>No recurring patterns found. Add more transaction history or try again after importing more data.</p>
+                  ) : (
+                    <>
+                      <p style={{ margin: "0 0 12px", fontSize: "11px", color: T.textLight }}>Check the ones you want to add as recurring budget items.</p>
+                      {detectedSubs.map((s) => {
+                        const checked = selectedSubIds.has(s.id);
+                        return (
+                          <label key={s.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px", background: checked ? T.accentBg : T.inputBg, border: `1px solid ${checked ? T.accentBorder : T.inputBorder}`, borderRadius: "10px", marginBottom: "6px", cursor: "pointer" }}>
+                            <input type="checkbox" checked={checked} onChange={() => {
+                              const next = new Set(selectedSubIds);
+                              if (checked) next.delete(s.id); else next.add(s.id);
+                              setSelectedSubIds(next);
+                            }} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.displayName}</p>
+                              <p style={{ margin: "2px 0 0", fontSize: "10px", color: T.textLight }}>{s.occurrences}× · {s.frequency} · last {s.lastDate}</p>
+                            </div>
+                            <span style={{ fontSize: "13px", ...S.mono, color: T.danger }}>{fmt(s.amount)}</span>
+                          </label>
+                        );
+                      })}
+                      <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                        <button onClick={addSelectedSubs} disabled={selectedSubIds.size === 0} style={{ ...S.greenBtn, opacity: selectedSubIds.size === 0 ? 0.5 : 1 }}>Add {selectedSubIds.size} to Budget</button>
+                        <button onClick={() => setDetectedSubs(null)} style={S.ghostBtn}>Dismiss</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
               {transactions.length === 0 && !showTxnForm && (
                 <div style={{ textAlign: "center", padding: "40px 20px", color: T.textLight }}>
