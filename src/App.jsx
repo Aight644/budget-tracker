@@ -41,6 +41,7 @@ export default function BudgetApp() {
   const [showBudgetEditor, setShowBudgetEditor] = useState(false);
   const [clearTxnsConfirm, setClearTxnsConfirm] = useState(false);
   const [collapsedMonths, setCollapsedMonths] = useState(new Set());
+  const [txnSearch, setTxnSearch] = useState("");
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const fmt = useMemo(() => makeFmt(currency), [currency]);
 
@@ -855,9 +856,16 @@ export default function BudgetApp() {
 
         {/* ACTIVITY / TRANSACTIONS TAB */}
         {activeTab === "transactions" && (() => {
+          const q = txnSearch.trim().toLowerCase();
           const filtered = transactions
             .filter(t => txnFilterAccount === "all" || t.accountId === txnFilterAccount)
             .filter(t => txnFilterCategory === "all" || t.category === txnFilterCategory)
+            .filter(t => {
+              if (!q) return true;
+              const cat = CATEGORIES.find(c => c.id === t.category)?.label || "";
+              const acct = accounts.find(a => a.id === t.accountId)?.name || "";
+              return [t.note, cat, acct, t.date, String(t.amount)].some(v => (v || "").toLowerCase().includes(q));
+            })
             .slice()
             .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
           const grouped = filtered.reduce((acc, t) => {
@@ -1045,16 +1053,25 @@ export default function BudgetApp() {
               )}
 
               {transactions.length > 0 && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
-                  <select value={txnFilterAccount} onChange={e => setTxnFilterAccount(e.target.value)} style={{ ...S.input, fontSize: "12px" }}>
-                    <option value="all">All accounts</option>
-                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                  </select>
-                  <select value={txnFilterCategory} onChange={e => setTxnFilterCategory(e.target.value)} style={{ ...S.input, fontSize: "12px" }}>
-                    <option value="all">All categories</option>
-                    {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                  </select>
-                </div>
+                <>
+                  <div style={{ position: "relative", marginBottom: "8px" }}>
+                    <input type="text" value={txnSearch} onChange={e => setTxnSearch(e.target.value)} placeholder="Search by name, category, account, date..." style={{ ...S.input, paddingRight: txnSearch ? "30px" : "12px" }} />
+                    {txnSearch && (
+                      <button onClick={() => setTxnSearch("")} style={{ position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: T.textLight, fontSize: "18px", cursor: "pointer", lineHeight: 1, padding: "4px 8px" }}>×</button>
+                    )}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+                    <select value={txnFilterAccount} onChange={e => setTxnFilterAccount(e.target.value)} style={{ ...S.input, fontSize: "12px" }}>
+                      <option value="all">All accounts</option>
+                      {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                    <select value={txnFilterCategory} onChange={e => setTxnFilterCategory(e.target.value)} style={{ ...S.input, fontSize: "12px" }}>
+                      <option value="all">All categories</option>
+                      {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                    </select>
+                  </div>
+                  {q && <p style={{ margin: "0 0 12px", fontSize: "11px", color: T.textLight }}>{filtered.length} result{filtered.length !== 1 ? "s" : ""} for "{txnSearch}"</p>}
+                </>
               )}
 
               {(() => {
@@ -1063,8 +1080,7 @@ export default function BudgetApp() {
                 return sortedKeys.map((k, idx) => {
                   const total = monthTotal(grouped[k]);
                   const autoCollapsed = idx > 0 && k !== currentYm;
-                  const manuallyToggled = collapsedMonths.has(k) || collapsedMonths.has(`!${k}`);
-                  const collapsed = collapsedMonths.has(`!${k}`) ? false : (collapsedMonths.has(k) || autoCollapsed);
+                  const collapsed = q ? false : (collapsedMonths.has(`!${k}`) ? false : (collapsedMonths.has(k) || autoCollapsed));
                   const toggle = () => {
                     setCollapsedMonths((prev) => {
                       const next = new Set(prev);
