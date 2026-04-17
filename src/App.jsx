@@ -40,6 +40,7 @@ export default function BudgetApp() {
   const [categoryBudgets, setCategoryBudgets] = useState({});
   const [showBudgetEditor, setShowBudgetEditor] = useState(false);
   const [clearTxnsConfirm, setClearTxnsConfirm] = useState(false);
+  const [collapsedMonths, setCollapsedMonths] = useState(new Set());
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const fmt = useMemo(() => makeFmt(currency), [currency]);
 
@@ -678,9 +679,9 @@ export default function BudgetApp() {
               {saveError && <p style={{ margin: "8px 0 0", fontSize: "11px", color: T.danger }}>⚠ Save failed: {saveError}. Export a backup now.</p>}
             </div>
 
-            {(items.length > 0 || goals.length > 0) && (clearConfirm ? (
+            {(items.length > 0 || goals.length > 0 || accounts.length > 0 || transactions.length > 0) && (clearConfirm ? (
               <div style={{ display: "flex", gap: "8px" }}>
-                <button onClick={() => { setItems([]); setGoals([]); clearStored(); setClearConfirm(false); }} style={{ flex: 1, padding: "12px", background: T.dangerBg, border: `1px solid ${T.dangerBorder}`, borderRadius: "10px", color: T.danger, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Yes, erase everything</button>
+                <button onClick={() => { setItems([]); setGoals([]); setAccounts([]); setTransactions([]); setCategoryBudgets({}); clearStored(); setClearConfirm(false); }} style={{ flex: 1, padding: "12px", background: T.dangerBg, border: `1px solid ${T.dangerBorder}`, borderRadius: "10px", color: T.danger, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Yes, erase everything</button>
                 <button onClick={() => setClearConfirm(false)} style={{ flex: 1, padding: "12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
               </div>
             ) : (
@@ -1056,35 +1057,55 @@ export default function BudgetApp() {
                 </div>
               )}
 
-              {Object.keys(grouped).sort((a, b) => b.localeCompare(a)).map(k => {
-                const total = monthTotal(grouped[k]);
-                return (
-                  <div key={k} style={{ marginBottom: "16px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", marginBottom: "4px" }}>
-                      <span style={{ fontSize: "12px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>{monthLabel(k)}</span>
-                      <span style={{ fontSize: "12px", ...S.mono, color: total >= 0 ? T.accent : T.danger }}>{total >= 0 ? "+" : ""}{fmt(total)}</span>
-                    </div>
-                    {grouped[k].map(t => {
-                      const c = catInfo(t.category);
-                      return (
-                        <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "10px", marginBottom: "4px", boxShadow: T.cardShadow }}>
-                          <div onClick={() => startEditTxn(t)} style={{ cursor: "pointer", flex: 1, minWidth: 0 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                              <span style={{ color: c.color, fontSize: "12px" }}>{c.icon}</span>
-                              <p style={{ margin: 0, fontSize: "13px", fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.note || c.label}</p>
+              {(() => {
+                const sortedKeys = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+                const currentYm = new Date().toISOString().slice(0, 7);
+                return sortedKeys.map((k, idx) => {
+                  const total = monthTotal(grouped[k]);
+                  const autoCollapsed = idx > 0 && k !== currentYm;
+                  const manuallyToggled = collapsedMonths.has(k) || collapsedMonths.has(`!${k}`);
+                  const collapsed = collapsedMonths.has(`!${k}`) ? false : (collapsedMonths.has(k) || autoCollapsed);
+                  const toggle = () => {
+                    setCollapsedMonths((prev) => {
+                      const next = new Set(prev);
+                      next.delete(k); next.delete(`!${k}`);
+                      if (!collapsed) next.add(k);
+                      else next.add(`!${k}`);
+                      return next;
+                    });
+                  };
+                  return (
+                    <div key={k} style={{ marginBottom: "10px" }}>
+                      <button onClick={toggle} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px", cursor: "pointer", fontFamily: "inherit", marginBottom: collapsed ? 0 : "6px" }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                          <span style={{ fontSize: "10px", color: T.textLight }}>{collapsed ? "▸" : "▾"}</span>
+                          {monthLabel(k)}
+                          <span style={{ fontSize: "10px", color: T.textLight, textTransform: "none", letterSpacing: 0 }}>· {grouped[k].length}</span>
+                        </span>
+                        <span style={{ fontSize: "12px", ...S.mono, color: total >= 0 ? T.accent : T.danger }}>{total >= 0 ? "+" : ""}{fmt(total)}</span>
+                      </button>
+                      {!collapsed && grouped[k].map(t => {
+                        const c = catInfo(t.category);
+                        return (
+                          <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "10px", marginBottom: "4px", boxShadow: T.cardShadow }}>
+                            <div onClick={() => startEditTxn(t)} style={{ cursor: "pointer", flex: 1, minWidth: 0 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <span style={{ color: c.color, fontSize: "12px" }}>{c.icon}</span>
+                                <p style={{ margin: 0, fontSize: "13px", fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.note || c.label}</p>
+                              </div>
+                              <p style={{ margin: "2px 0 0 18px", fontSize: "10px", color: T.textLight }}>{t.date} {t.accountId && `· ${acctName(t.accountId)}`}</p>
                             </div>
-                            <p style={{ margin: "2px 0 0 18px", fontSize: "10px", color: T.textLight }}>{t.date} {t.accountId && `· ${acctName(t.accountId)}`}</p>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <span style={{ fontSize: "13px", ...S.mono, color: t.isIncome ? T.accent : T.danger }}>{t.isIncome ? "+" : "-"}{fmt(t.amount)}</span>
+                              <DelBtn id={t.id} onDel={id => { setTransactions(p => p.filter(x => x.id !== id)); setDeleteTxnConfirm(null); }} confirm={deleteTxnConfirm} setConfirm={setDeleteTxnConfirm} />
+                            </div>
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <span style={{ fontSize: "13px", ...S.mono, color: t.isIncome ? T.accent : T.danger }}>{t.isIncome ? "+" : "-"}{fmt(t.amount)}</span>
-                            <DelBtn id={t.id} onDel={id => { setTransactions(p => p.filter(x => x.id !== id)); setDeleteTxnConfirm(null); }} confirm={deleteTxnConfirm} setConfirm={setDeleteTxnConfirm} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
+                        );
+                      })}
+                    </div>
+                  );
+                });
+              })()}
 
               {transactions.length > 0 && !csvState && !detectedSubs && !showTxnForm && (
                 <div style={{ marginTop: "24px" }}>
