@@ -1010,6 +1010,10 @@ export default function BudgetApp() {
                                 <p style={{ margin: "2px 0 0 14px", fontSize: "10px", color: T.textLight }}>{s.occurrences}× · last {s.lastDate}</p>
                               </div>
                               <span style={{ fontSize: "13px", ...S.mono, color: T.danger }}>{fmt(s.amount)}</span>
+                              <button onClick={() => {
+                                setDetectedSubs((p) => p.filter((x) => x.id !== s.id));
+                                setSelectedSubIds((p) => { const n = new Set(p); n.delete(s.id); return n; });
+                              }} title="Remove from list" style={{ padding: "2px 6px", background: "transparent", border: "none", color: T.textLight, fontSize: "18px", cursor: "pointer", lineHeight: 1 }}>×</button>
                             </div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                               <select value={s.frequency} onChange={(e) => updateDetectedSub(s.id, { frequency: e.target.value })} style={{ ...S.input, fontSize: "11px", padding: "6px 8px" }}>
