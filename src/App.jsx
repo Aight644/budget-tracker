@@ -24,6 +24,13 @@ export default function BudgetApp() {
   const [editingAccountId, setEditingAccountId] = useState(null);
   const [accountFormData, setAccountFormData] = useState({ name: "", type: "checking", balance: "", color: "#2563eb", includeInNetWorth: true });
   const [deleteAccountConfirm, setDeleteAccountConfirm] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [showTxnForm, setShowTxnForm] = useState(false);
+  const [editingTxnId, setEditingTxnId] = useState(null);
+  const [txnFormData, setTxnFormData] = useState({ accountId: "", amount: "", category: "other", date: new Date().toISOString().slice(0, 10), note: "", isIncome: false });
+  const [deleteTxnConfirm, setDeleteTxnConfirm] = useState(null);
+  const [txnFilterAccount, setTxnFilterAccount] = useState("all");
+  const [txnFilterCategory, setTxnFilterCategory] = useState("all");
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const fmt = useMemo(() => makeFmt(currency), [currency]);
 
@@ -38,6 +45,7 @@ export default function BudgetApp() {
       if (Array.isArray(d.items)) setItems(d.items);
       if (Array.isArray(d.goals)) setGoals(d.goals);
       if (Array.isArray(d.accounts)) setAccounts(d.accounts);
+      if (Array.isArray(d.transactions)) setTransactions(d.transactions);
       if (d.view) setView(d.view);
       if (d.darkMode !== undefined) setDarkMode(d.darkMode);
       if (d.currency && CURRENCIES.some((c) => c.code === d.currency)) setCurrency(d.currency);
@@ -47,12 +55,12 @@ export default function BudgetApp() {
 
   useEffect(() => {
     if (!loaded) return;
-    const r = saveStored({ items, goals, accounts, view, darkMode, currency });
+    const r = saveStored({ items, goals, accounts, transactions, view, darkMode, currency });
     setSaveError(r.ok ? null : r.error);
-  }, [items, goals, accounts, view, darkMode, currency, loaded]);
+  }, [items, goals, accounts, transactions, view, darkMode, currency, loaded]);
 
   const handleExport = () => {
-    const payload = { version: SCHEMA_VERSION, exportedAt: new Date().toISOString(), items, goals, accounts, view, darkMode, currency };
+    const payload = { version: SCHEMA_VERSION, exportedAt: new Date().toISOString(), items, goals, accounts, transactions, view, darkMode, currency };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -71,14 +79,15 @@ export default function BudgetApp() {
     reader.onload = (ev) => {
       try {
         const d = JSON.parse(ev.target.result);
-        if (!Array.isArray(d.items) && !Array.isArray(d.goals) && !Array.isArray(d.accounts)) throw new Error("Not a valid backup file");
+        if (!Array.isArray(d.items) && !Array.isArray(d.goals) && !Array.isArray(d.accounts) && !Array.isArray(d.transactions)) throw new Error("Not a valid backup file");
         if (Array.isArray(d.items)) setItems(d.items);
         if (Array.isArray(d.goals)) setGoals(d.goals);
         if (Array.isArray(d.accounts)) setAccounts(d.accounts);
+        if (Array.isArray(d.transactions)) setTransactions(d.transactions);
         if (d.view) setView(d.view);
         if (d.darkMode !== undefined) setDarkMode(d.darkMode);
         if (d.currency && CURRENCIES.some((c) => c.code === d.currency)) setCurrency(d.currency);
-        setImportMsg({ type: "ok", text: `Imported ${(d.items || []).length} items, ${(d.goals || []).length} goals, ${(d.accounts || []).length} accounts` });
+        setImportMsg({ type: "ok", text: `Imported ${(d.items || []).length} items, ${(d.goals || []).length} goals, ${(d.accounts || []).length} accounts, ${(d.transactions || []).length} transactions` });
       } catch (err) {
         setImportMsg({ type: "err", text: `Import failed: ${err.message}` });
       }
@@ -115,6 +124,24 @@ export default function BudgetApp() {
     setAccountFormData({ name: a.name, type: a.type, balance: a.balance.toString(), color: a.color || "#2563eb", includeInNetWorth: a.includeInNetWorth !== false });
     setEditingAccountId(a.id);
     setShowAccountForm(true);
+  };
+
+  const resetTxnForm = () => { setTxnFormData({ accountId: accounts[0]?.id || "", amount: "", category: "other", date: new Date().toISOString().slice(0, 10), note: "", isIncome: false }); setEditingTxnId(null); setShowTxnForm(false); };
+
+  const handleTxnSubmit = () => {
+    if (!txnFormData.amount || !txnFormData.date) return;
+    const amt = parseFloat(txnFormData.amount);
+    if (!isFinite(amt) || amt < 0) return;
+    const clean = { ...txnFormData, amount: amt, note: txnFormData.note.trim() };
+    if (editingTxnId) setTransactions(p => p.map(t => t.id === editingTxnId ? { ...t, ...clean } : t));
+    else setTransactions(p => [...p, { ...clean, id: Date.now().toString() }]);
+    resetTxnForm();
+  };
+
+  const startEditTxn = (t) => {
+    setTxnFormData({ accountId: t.accountId || "", amount: t.amount.toString(), category: t.category || "other", date: t.date || new Date().toISOString().slice(0, 10), note: t.note || "", isIncome: !!t.isIncome });
+    setEditingTxnId(t.id);
+    setShowTxnForm(true);
   };
 
   const netWorth = accounts.filter(a => a.includeInNetWorth !== false).reduce((s, a) => {
@@ -258,6 +285,7 @@ export default function BudgetApp() {
           { id: "dashboard", label: "Overview" },
           { id: "items", label: "Budget" },
           { id: "accounts", label: "Accounts" },
+          { id: "transactions", label: "Activity" },
           { id: "goals", label: "Goals" },
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ flex: 1, padding: "12px 6px", border: "none", borderBottom: activeTab === tab.id ? `2px solid ${T.accent}` : "2px solid transparent", fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", background: "transparent", color: activeTab === tab.id ? T.accent : T.textLight }}>{tab.label}</button>
@@ -351,6 +379,30 @@ export default function BudgetApp() {
                 </div>
               );
             })()}
+
+            {transactions.length > 0 && (
+              <div style={S.card}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <h3 style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>Recent Activity</h3>
+                  <button onClick={() => setActiveTab("transactions")} style={{ background: "none", border: "none", color: T.accent, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>View All →</button>
+                </div>
+                {transactions.slice().sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 5).map(t => {
+                  const c = CATEGORIES.find(c => c.id === t.category) || { label: t.category, icon: "•", color: T.textMuted };
+                  return (
+                    <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.inputBorder}` }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ color: c.color, fontSize: "11px" }}>{c.icon}</span>
+                          <span style={{ fontSize: "13px", fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.note || c.label}</span>
+                        </div>
+                        <p style={{ margin: "2px 0 0 17px", fontSize: "10px", color: T.textLight }}>{t.date}</p>
+                      </div>
+                      <span style={{ fontSize: "13px", ...S.mono, color: t.isIncome ? T.accent : T.danger }}>{t.isIncome ? "+" : "-"}{fmt(t.amount)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {goals.length > 0 && (
               <div style={S.card}>
@@ -585,6 +637,123 @@ export default function BudgetApp() {
             })}
           </>
         )}
+
+        {/* ACTIVITY / TRANSACTIONS TAB */}
+        {activeTab === "transactions" && (() => {
+          const filtered = transactions
+            .filter(t => txnFilterAccount === "all" || t.accountId === txnFilterAccount)
+            .filter(t => txnFilterCategory === "all" || t.category === txnFilterCategory)
+            .slice()
+            .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+          const grouped = filtered.reduce((acc, t) => {
+            const k = (t.date || "").slice(0, 7) || "undated";
+            (acc[k] ||= []).push(t);
+            return acc;
+          }, {});
+          const monthLabel = (k) => {
+            if (k === "undated") return "No date";
+            const [y, m] = k.split("-");
+            return new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString(undefined, { year: "numeric", month: "long" });
+          };
+          const acctName = (id) => accounts.find(a => a.id === id)?.name || "—";
+          const catInfo = (id) => CATEGORIES.find(c => c.id === id) || { label: id, icon: "•", color: T.textMuted };
+          const monthTotal = (list) => list.reduce((s, t) => s + (t.isIncome ? 1 : -1) * (t.amount || 0), 0);
+
+          return (
+            <>
+              {showTxnForm && (
+                <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "14px", padding: "16px", marginBottom: "16px", boxShadow: T.cardShadow }}>
+                  <h3 style={{ margin: "0 0 14px", fontSize: "14px", fontWeight: "600" }}>{editingTxnId ? "Edit Transaction" : "Add Transaction"}</h3>
+                  <div style={{ display: "flex", gap: "4px", background: T.toggleBg, borderRadius: "8px", padding: "3px", marginBottom: "12px" }}>
+                    <button onClick={() => setTxnFormData({ ...txnFormData, isIncome: false, category: txnFormData.category === "income" ? "other" : txnFormData.category })} style={{ flex: 1, padding: "8px", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", background: !txnFormData.isIncome ? T.dangerBg : "transparent", color: !txnFormData.isIncome ? T.danger : T.textLight }}>Expense</button>
+                    <button onClick={() => setTxnFormData({ ...txnFormData, isIncome: true, category: "income" })} style={{ flex: 1, padding: "8px", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", background: txnFormData.isIncome ? T.accentBg : "transparent", color: txnFormData.isIncome ? T.accent : T.textLight }}>Income</button>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                    <div><label style={S.label}>Amount</label><input type="number" value={txnFormData.amount} onChange={e => setTxnFormData({ ...txnFormData, amount: e.target.value })} placeholder="0.00" style={S.input} /></div>
+                    <div><label style={S.label}>Date</label><input type="date" value={txnFormData.date} onChange={e => setTxnFormData({ ...txnFormData, date: e.target.value })} style={S.input} /></div>
+                  </div>
+                  <div style={{ marginBottom: "10px" }}>
+                    <label style={S.label}>Account</label>
+                    <select value={txnFormData.accountId} onChange={e => setTxnFormData({ ...txnFormData, accountId: e.target.value })} style={S.input}>
+                      <option value="">— No account —</option>
+                      {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                  </div>
+                  {!txnFormData.isIncome && (
+                    <div style={{ marginBottom: "10px" }}>
+                      <label style={S.label}>Category</label>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px" }}>
+                        {CATEGORIES.filter(c => c.id !== "income").map(c => (
+                          <button key={c.id} onClick={() => setTxnFormData({ ...txnFormData, category: c.id })} style={{ padding: "8px 6px", border: txnFormData.category === c.id ? `2px solid ${c.color}` : `1px solid ${T.inputBorder}`, borderRadius: "8px", background: txnFormData.category === c.id ? `${c.color}10` : T.catBtnBg, color: txnFormData.category === c.id ? c.color : T.textMuted, fontSize: "11px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>{c.icon} {c.label}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ marginBottom: "14px" }}>
+                    <label style={S.label}>Note (optional)</label>
+                    <input type="text" value={txnFormData.note} onChange={e => setTxnFormData({ ...txnFormData, note: e.target.value })} placeholder="e.g. Coffee with Sam" style={S.input} />
+                  </div>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button onClick={handleTxnSubmit} style={S.greenBtn}>{editingTxnId ? "Update" : "Add"}</button>
+                    <button onClick={resetTxnForm} style={S.ghostBtn}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              {!showTxnForm && <button onClick={() => { resetTxnForm(); setShowTxnForm(true); }} style={{ width: "100%", padding: "14px", marginBottom: "16px", background: T.accentBg, border: `1px dashed ${T.accentBorder}`, borderRadius: "12px", color: T.accent, fontSize: "14px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>+ Add Transaction</button>}
+
+              {transactions.length === 0 && !showTxnForm && (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: T.textLight }}>
+                  <p style={{ fontSize: "40px", margin: "0 0 12px", opacity: 0.3 }}>∿</p>
+                  <p style={{ fontSize: "14px", fontWeight: "600", color: T.textMuted, margin: "0 0 8px" }}>No transactions yet</p>
+                  <p style={{ fontSize: "13px" }}>Log real spending as it happens. Use the CSV import (coming soon) to bulk-add from bank statements.</p>
+                </div>
+              )}
+
+              {transactions.length > 0 && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+                  <select value={txnFilterAccount} onChange={e => setTxnFilterAccount(e.target.value)} style={{ ...S.input, fontSize: "12px" }}>
+                    <option value="all">All accounts</option>
+                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                  <select value={txnFilterCategory} onChange={e => setTxnFilterCategory(e.target.value)} style={{ ...S.input, fontSize: "12px" }}>
+                    <option value="all">All categories</option>
+                    {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {Object.keys(grouped).sort((a, b) => b.localeCompare(a)).map(k => {
+                const total = monthTotal(grouped[k]);
+                return (
+                  <div key={k} style={{ marginBottom: "16px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "12px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>{monthLabel(k)}</span>
+                      <span style={{ fontSize: "12px", ...S.mono, color: total >= 0 ? T.accent : T.danger }}>{total >= 0 ? "+" : ""}{fmt(total)}</span>
+                    </div>
+                    {grouped[k].map(t => {
+                      const c = catInfo(t.category);
+                      return (
+                        <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "10px", marginBottom: "4px", boxShadow: T.cardShadow }}>
+                          <div onClick={() => startEditTxn(t)} style={{ cursor: "pointer", flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span style={{ color: c.color, fontSize: "12px" }}>{c.icon}</span>
+                              <p style={{ margin: 0, fontSize: "13px", fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.note || c.label}</p>
+                            </div>
+                            <p style={{ margin: "2px 0 0 18px", fontSize: "10px", color: T.textLight }}>{t.date} {t.accountId && `· ${acctName(t.accountId)}`}</p>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ fontSize: "13px", ...S.mono, color: t.isIncome ? T.accent : T.danger }}>{t.isIncome ? "+" : "-"}{fmt(t.amount)}</span>
+                            <DelBtn id={t.id} onDel={id => { setTransactions(p => p.filter(x => x.id !== id)); setDeleteTxnConfirm(null); }} confirm={deleteTxnConfirm} setConfirm={setDeleteTxnConfirm} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </>
+          );
+        })()}
 
         {/* GOALS TAB */}
         {activeTab === "goals" && (
