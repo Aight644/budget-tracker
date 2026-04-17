@@ -39,6 +39,7 @@ export default function BudgetApp() {
   const csvFileRef = useRef(null);
   const [categoryBudgets, setCategoryBudgets] = useState({});
   const [showBudgetEditor, setShowBudgetEditor] = useState(false);
+  const [clearTxnsConfirm, setClearTxnsConfirm] = useState(false);
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const fmt = useMemo(() => makeFmt(currency), [currency]);
 
@@ -1080,6 +1081,19 @@ export default function BudgetApp() {
                   </div>
                 );
               })}
+
+              {transactions.length > 0 && !csvState && !detectedSubs && !showTxnForm && (
+                <div style={{ marginTop: "24px" }}>
+                  {clearTxnsConfirm ? (
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button onClick={() => { setTransactions([]); setClearTxnsConfirm(false); }} style={{ flex: 1, padding: "12px", background: T.dangerBg, border: `1px solid ${T.dangerBorder}`, borderRadius: "10px", color: T.danger, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Yes, delete {transactions.length} transactions</button>
+                      <button onClick={() => setClearTxnsConfirm(false)} style={{ flex: 1, padding: "12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setClearTxnsConfirm(true)} style={{ width: "100%", padding: "12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px", color: T.textLight, fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>Clear all transactions</button>
+                  )}
+                </div>
+              )}
             </>
           );
         })()}
