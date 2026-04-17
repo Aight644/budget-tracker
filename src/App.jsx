@@ -189,6 +189,10 @@ export default function BudgetApp() {
     setSelectedSubIds(new Set(subs.map((s) => s.id)));
   };
 
+  const updateDetectedSub = (id, patch) => {
+    setDetectedSubs((p) => p ? p.map((s) => s.id === id ? { ...s, ...patch } : s) : p);
+  };
+
   const addSelectedSubs = () => {
     if (!detectedSubs) return;
     const existing = new Set(items.map((i) => (i.name || "").toLowerCase()));
@@ -202,6 +206,7 @@ export default function BudgetApp() {
         frequency: s.frequency,
         category: s.category,
         isIncome: false,
+        dueDate: s.lastDate || "",
       }));
     if (toAdd.length > 0) setItems((p) => [...p, ...toAdd]);
     setImportMsg({ type: "ok", text: `Added ${toAdd.length} recurring items to Budget` });
@@ -952,7 +957,7 @@ export default function BudgetApp() {
                         {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                       </select>
                     </div>
-                    <p style={{ margin: "0 0 6px", fontSize: "11px", color: T.textLight, fontWeight: "600", textTransform: "uppercase" }}>Preview — first 10 rows · {totalCount} total</p>
+                    <p style={{ margin: "0 0 6px", fontSize: "11px", color: T.textLight, fontWeight: "600", textTransform: "uppercase" }}>Preview · {totalCount} parsed of {csvState.rows.length - 1} rows{totalCount < csvState.rows.length - 1 ? ` (${csvState.rows.length - 1 - totalCount} skipped — check date format)` : ""}</p>
                     <div style={{ maxHeight: "200px", overflowY: "auto", border: `1px solid ${T.inputBorder}`, borderRadius: "8px", marginBottom: "12px" }}>
                       {preview.length === 0 ? (
                         <p style={{ padding: "10px", margin: 0, fontSize: "12px", color: T.danger }}>No rows parsed — try different columns or date format</p>
@@ -981,25 +986,39 @@ export default function BudgetApp() {
                     <button onClick={() => setDetectedSubs(null)} style={{ background: "none", border: "none", color: T.textLight, fontSize: "18px", cursor: "pointer" }}>×</button>
                   </div>
                   {detectedSubs.length === 0 ? (
-                    <p style={{ margin: "0 0 12px", fontSize: "12px", color: T.textLight }}>No recurring patterns found. Add more transaction history or try again after importing more data.</p>
+                    <p style={{ margin: "0 0 12px", fontSize: "12px", color: T.textLight }}>No recurring patterns found. Need at least 2 occurrences of the same merchant. Try importing more transaction history.</p>
                   ) : (
                     <>
-                      <p style={{ margin: "0 0 12px", fontSize: "11px", color: T.textLight }}>Check the ones you want to add as recurring budget items.</p>
+                      <p style={{ margin: "0 0 12px", fontSize: "11px", color: T.textLight }}>Check items to add. Edit frequency or category if needed. <span style={{ color: T.accent }}>●</span> high · <span style={{ color: "#d97706" }}>●</span> medium · <span style={{ color: T.danger }}>●</span> low confidence.</p>
                       {detectedSubs.map((s) => {
                         const checked = selectedSubIds.has(s.id);
+                        const confColor = s.confidence === "high" ? T.accent : s.confidence === "medium" ? "#d97706" : T.danger;
                         return (
-                          <label key={s.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px", background: checked ? T.accentBg : T.inputBg, border: `1px solid ${checked ? T.accentBorder : T.inputBorder}`, borderRadius: "10px", marginBottom: "6px", cursor: "pointer" }}>
-                            <input type="checkbox" checked={checked} onChange={() => {
-                              const next = new Set(selectedSubIds);
-                              if (checked) next.delete(s.id); else next.add(s.id);
-                              setSelectedSubIds(next);
-                            }} />
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.displayName}</p>
-                              <p style={{ margin: "2px 0 0", fontSize: "10px", color: T.textLight }}>{s.occurrences}× · {s.frequency} · last {s.lastDate}</p>
+                          <div key={s.id} style={{ padding: "10px", background: checked ? T.accentBg : T.inputBg, border: `1px solid ${checked ? T.accentBorder : T.inputBorder}`, borderRadius: "10px", marginBottom: "6px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+                              <input type="checkbox" checked={checked} onChange={() => {
+                                const next = new Set(selectedSubIds);
+                                if (checked) next.delete(s.id); else next.add(s.id);
+                                setSelectedSubIds(next);
+                              }} style={{ cursor: "pointer" }} />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <span style={{ color: confColor, fontSize: "10px" }}>●</span>
+                                  <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.displayName}</p>
+                                </div>
+                                <p style={{ margin: "2px 0 0 14px", fontSize: "10px", color: T.textLight }}>{s.occurrences}× · last {s.lastDate}</p>
+                              </div>
+                              <span style={{ fontSize: "13px", ...S.mono, color: T.danger }}>{fmt(s.amount)}</span>
                             </div>
-                            <span style={{ fontSize: "13px", ...S.mono, color: T.danger }}>{fmt(s.amount)}</span>
-                          </label>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                              <select value={s.frequency} onChange={(e) => updateDetectedSub(s.id, { frequency: e.target.value })} style={{ ...S.input, fontSize: "11px", padding: "6px 8px" }}>
+                                {FREQUENCIES.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+                              </select>
+                              <select value={s.category} onChange={(e) => updateDetectedSub(s.id, { category: e.target.value })} style={{ ...S.input, fontSize: "11px", padding: "6px 8px" }}>
+                                {CATEGORIES.filter((c) => c.id !== "income").map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                              </select>
+                            </div>
+                          </div>
                         );
                       })}
                       <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
