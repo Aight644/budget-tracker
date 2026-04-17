@@ -5,6 +5,7 @@ import { toYr, convertBy, advanceDue, rollForwardDue, daysUntil } from "./lib/ca
 import { makeFmt } from "./lib/format.js";
 import { parseCSV, detectColumns, rowsToTransactions } from "./lib/csv.js";
 import { detectSubscriptions } from "./lib/subscriptions.js";
+import { computeCoach, generateInsights, scoreLabel } from "./lib/coach.js";
 
 export default function BudgetApp() {
   const [items, setItems] = useState([]);
@@ -377,6 +378,7 @@ export default function BudgetApp() {
           { id: "accounts", label: "Accounts" },
           { id: "transactions", label: "Activity" },
           { id: "goals", label: "Goals" },
+          { id: "coach", label: "Coach" },
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ flex: 1, padding: "12px 6px", border: "none", borderBottom: activeTab === tab.id ? `2px solid ${T.accent}` : "2px solid transparent", fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", background: "transparent", color: activeTab === tab.id ? T.accent : T.textLight }}>{tab.label}</button>
         ))}
@@ -1227,6 +1229,76 @@ export default function BudgetApp() {
             })}
           </>
         )}
+
+        {/* COACH TAB */}
+        {activeTab === "coach" && (() => {
+          const data = computeCoach({ items, goals, accounts, transactions, categoryBudgets });
+          const insights = generateInsights(data, { goals, accounts, items, categoriesLookup: CATEGORIES }, fmt);
+          const { healthScore } = data;
+          const sl = scoreLabel(healthScore);
+          const scoreRow = (label, score) => {
+            if (score === null) return null;
+            const s = Math.round(score);
+            return (
+              <div key={label} style={{ marginBottom: "10px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                  <span style={{ fontSize: "12px", color: T.textMuted }}>{label}</span>
+                  <span style={{ fontSize: "12px", ...S.mono, color: s >= 65 ? T.accent : s >= 40 ? "#d97706" : T.danger }}>{s}</span>
+                </div>
+                <div style={{ height: "5px", background: T.inputBg, borderRadius: "3px", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${s}%`, background: s >= 65 ? T.accent : s >= 40 ? "#d97706" : T.danger, borderRadius: "3px" }} />
+                </div>
+              </div>
+            );
+          };
+          const typeStyle = (type) => {
+            if (type === "warn") return { bg: T.dangerBg, border: T.dangerBorder, color: T.danger, icon: "!" };
+            if (type === "good") return { bg: T.accentBg, border: T.accentBorder, color: T.accent, icon: "✓" };
+            if (type === "ok") return { bg: T.accentBg, border: T.accentBorder, color: T.accent, icon: "•" };
+            return { bg: T.inputBg, border: T.inputBorder, color: T.textMuted, icon: "i" };
+          };
+
+          return (
+            <>
+              <div style={{ background: sl.color + "14", border: `1px solid ${sl.color}40`, borderRadius: "14px", padding: "20px", marginBottom: "16px", textAlign: "center" }}>
+                <p style={{ margin: 0, fontSize: "11px", color: T.textMuted, fontWeight: "600", textTransform: "uppercase", letterSpacing: "1px" }}>Financial Health</p>
+                <p style={{ margin: "8px 0 0", fontSize: "44px", ...S.mono, color: sl.color, letterSpacing: "-1px", lineHeight: 1 }}>{healthScore}<span style={{ fontSize: "18px", color: T.textLight, marginLeft: "4px" }}>/100</span></p>
+                <p style={{ margin: "6px 0 0", fontSize: "13px", fontWeight: "600", color: sl.color }}>{sl.label}</p>
+              </div>
+
+              <div style={S.card}>
+                <h3 style={{ margin: "0 0 12px", fontSize: "13px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>Breakdown</h3>
+                {scoreRow("Savings rate", data.scores.savings)}
+                {scoreRow("Emergency fund", data.scores.emergency)}
+                {scoreRow("Debt burden", data.scores.debt)}
+                {scoreRow("Budget adherence", data.scores.budget)}
+                {scoreRow("Goals progress", data.scores.goal)}
+                {(data.scores.emergency === null || data.scores.debt === null) && <p style={{ margin: "8px 0 0", fontSize: "11px", color: T.textLight }}>Add accounts to unlock emergency fund &amp; debt metrics.</p>}
+                {data.scores.budget === null && <p style={{ margin: "4px 0 0", fontSize: "11px", color: T.textLight }}>Set monthly category budgets in Settings to track adherence.</p>}
+              </div>
+
+              {insights.length > 0 && (
+                <div style={{ marginBottom: "16px" }}>
+                  <h3 style={{ margin: "0 0 10px 4px", fontSize: "13px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>Insights &amp; Suggestions</h3>
+                  {insights.map((ins, i) => {
+                    const t = typeStyle(ins.type);
+                    return (
+                      <div key={i} style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: "12px", padding: "12px 14px", marginBottom: "8px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                          <span style={{ width: "18px", height: "18px", borderRadius: "50%", background: t.color, color: "#fff", fontSize: "11px", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: "700" }}>{t.icon}</span>
+                          <span style={{ fontSize: "13px", fontWeight: "600", color: t.color }}>{ins.title}</span>
+                        </div>
+                        <p style={{ margin: "0 0 0 26px", fontSize: "12px", color: T.text, lineHeight: 1.5 }}>{ins.text}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <p style={{ fontSize: "10px", color: T.textLight, textAlign: "center", padding: "8px 16px", lineHeight: 1.5 }}>This is educational guidance, not professional financial advice. Consider consulting a financial advisor for major decisions.</p>
+            </>
+          );
+        })()}
       </div>
     </div>
   );
