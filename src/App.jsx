@@ -1,4 +1,33 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+
+const SCHEMA_VERSION = 4;
+const STORAGE_KEY = "budget-app-v4";
+const LEGACY_KEY = "budget-app-v3";
+const BACKUP_KEY = "budget-app-v4-prev";
+
+function loadStored() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (legacy) {
+      const d = JSON.parse(legacy);
+      return { version: SCHEMA_VERSION, ...d };
+    }
+  } catch (e) {}
+  return null;
+}
+
+function saveStored(data) {
+  try {
+    const current = localStorage.getItem(STORAGE_KEY);
+    if (current) localStorage.setItem(BACKUP_KEY, current);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: SCHEMA_VERSION, ...data }));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message || "Failed to save" };
+  }
+}
 
 const CATEGORIES = [
   { id: "income", label: "Income", icon: "↑", color: "#16a34a" },
@@ -41,8 +70,62 @@ export default function BudgetApp() {
   const [deleteGoalConfirm, setDeleteGoalConfirm] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
 
-  useEffect(() => { try { const raw = localStorage.getItem("budget-app-v3"); if (raw) { const d = JSON.parse(raw); if (d.items) setItems(d.items); if (d.goals) setGoals(d.goals); if (d.view) setView(d.view); if (d.darkMode !== undefined) setDarkMode(d.darkMode); } } catch(e){} setLoaded(true); }, []);
-  useEffect(() => { if (!loaded) return; try { localStorage.setItem("budget-app-v3", JSON.stringify({ items, goals, view, darkMode })); } catch(e){} }, [items, goals, view, darkMode, loaded]);
+  const [saveError, setSaveError] = useState(null);
+  const [clearConfirm, setClearConfirm] = useState(false);
+  const [importMsg, setImportMsg] = useState(null);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    const d = loadStored();
+    if (d) {
+      if (Array.isArray(d.items)) setItems(d.items);
+      if (Array.isArray(d.goals)) setGoals(d.goals);
+      if (d.view) setView(d.view);
+      if (d.darkMode !== undefined) setDarkMode(d.darkMode);
+    }
+    setLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const r = saveStored({ items, goals, view, darkMode });
+    setSaveError(r.ok ? null : r.error);
+  }, [items, goals, view, darkMode, loaded]);
+
+  const handleExport = () => {
+    const payload = { version: SCHEMA_VERSION, exportedAt: new Date().toISOString(), items, goals, view, darkMode };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `budget-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const d = JSON.parse(ev.target.result);
+        if (!Array.isArray(d.items) && !Array.isArray(d.goals)) throw new Error("Not a valid backup file");
+        if (Array.isArray(d.items)) setItems(d.items);
+        if (Array.isArray(d.goals)) setGoals(d.goals);
+        if (d.view) setView(d.view);
+        if (d.darkMode !== undefined) setDarkMode(d.darkMode);
+        setImportMsg({ type: "ok", text: `Imported ${(d.items || []).length} items, ${(d.goals || []).length} goals` });
+      } catch (err) {
+        setImportMsg({ type: "err", text: `Import failed: ${err.message}` });
+      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setTimeout(() => setImportMsg(null), 4000);
+    };
+    reader.readAsText(file);
+  };
 
   const convert = useCallback((a, f) => view === "fortnightly" ? toFn(a, f) : view === "monthly" ? toMo(a, f) : toYr(a, f), [view]);
 
@@ -57,15 +140,28 @@ export default function BudgetApp() {
   const resetGoalForm = () => { setGoalFormData({ name: "", target: "", saved: "0", monthlySaving: "", deadline: "", color: "#16a34a" }); setEditingGoalId(null); setShowGoalForm(false); };
 
   const handleSubmit = () => {
-    if (!formData.name || !formData.amount) return;
-    if (editingId) setItems(p => p.map(i => i.id === editingId ? { ...i, ...formData, amount: parseFloat(formData.amount) } : i));
-    else setItems(p => [...p, { ...formData, id: Date.now().toString(), amount: parseFloat(formData.amount) }]);
+    if (!formData.name.trim() || !formData.amount) return;
+    const amt = parseFloat(formData.amount);
+    if (!isFinite(amt) || amt < 0) return;
+    const clean = { ...formData, name: formData.name.trim(), amount: amt };
+    if (editingId) setItems(p => p.map(i => i.id === editingId ? { ...i, ...clean } : i));
+    else setItems(p => [...p, { ...clean, id: Date.now().toString() }]);
     resetForm();
   };
 
   const handleGoalSubmit = () => {
-    if (!goalFormData.name || !goalFormData.target) return;
-    const gd = { ...goalFormData, target: parseFloat(goalFormData.target), saved: parseFloat(goalFormData.saved) || 0, monthlySaving: parseFloat(goalFormData.monthlySaving) || 0 };
+    if (!goalFormData.name.trim() || !goalFormData.target) return;
+    const target = parseFloat(goalFormData.target);
+    const saved = parseFloat(goalFormData.saved);
+    const monthly = parseFloat(goalFormData.monthlySaving);
+    if (!isFinite(target) || target <= 0) return;
+    const gd = {
+      ...goalFormData,
+      name: goalFormData.name.trim(),
+      target,
+      saved: isFinite(saved) && saved >= 0 ? saved : 0,
+      monthlySaving: isFinite(monthly) && monthly >= 0 ? monthly : 0,
+    };
     if (editingGoalId) setGoals(p => p.map(g => g.id === editingGoalId ? { ...g, ...gd } : g));
     else setGoals(p => [...p, { ...gd, id: Date.now().toString() }]);
     resetGoalForm();
@@ -289,7 +385,26 @@ export default function BudgetApp() {
               </div>
             </div>
 
-            <button onClick={() => { setItems([]); setGoals([]); try { localStorage.removeItem("budget-app-v3"); } catch(e){} }} style={{ width: "100%", padding: "12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px", color: T.textLight, fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>Clear All Data</button>
+            <div style={S.card}>
+              <h3 style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>Backup & Data</h3>
+              <p style={{ margin: "0 0 12px", fontSize: "11px", color: T.textLight }}>Your data is saved in this browser only. Export regularly to keep a backup.</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+                <button onClick={handleExport} style={{ padding: "10px", background: T.accentBg, border: `1px solid ${T.accentBorder}`, borderRadius: "10px", color: T.accent, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>↓ Export backup</button>
+                <button onClick={() => fileInputRef.current?.click()} style={{ padding: "10px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>↑ Import backup</button>
+                <input ref={fileInputRef} type="file" accept="application/json,.json" onChange={handleImport} style={{ display: "none" }} />
+              </div>
+              {importMsg && <p style={{ margin: "8px 0 0", fontSize: "11px", color: importMsg.type === "ok" ? T.accent : T.danger }}>{importMsg.text}</p>}
+              {saveError && <p style={{ margin: "8px 0 0", fontSize: "11px", color: T.danger }}>⚠ Save failed: {saveError}. Export a backup now.</p>}
+            </div>
+
+            {clearConfirm ? (
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button onClick={() => { setItems([]); setGoals([]); try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(LEGACY_KEY); } catch(e){} setClearConfirm(false); }} style={{ flex: 1, padding: "12px", background: T.dangerBg, border: `1px solid ${T.dangerBorder}`, borderRadius: "10px", color: T.danger, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Yes, erase everything</button>
+                <button onClick={() => setClearConfirm(false)} style={{ flex: 1, padding: "12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+              </div>
+            ) : (
+              <button onClick={() => setClearConfirm(true)} style={{ width: "100%", padding: "12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px", color: T.textLight, fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>Clear All Data</button>
+            )}
           </>
         ))}
 
