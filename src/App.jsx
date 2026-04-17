@@ -377,16 +377,39 @@ export default function BudgetApp() {
       <div style={{ padding: "16px 20px 120px" }}>
 
         {/* DASHBOARD */}
-        {activeTab === "dashboard" && accounts.length > 0 && (
-          <div style={{ background: netWorth >= 0 ? T.accentBg : T.dangerBg, border: `1px solid ${netWorth >= 0 ? T.accentBorder : T.dangerBorder}`, borderRadius: "14px", padding: "20px", marginBottom: "16px", textAlign: "center" }}>
-            <p style={{ margin: 0, fontSize: "11px", color: T.textMuted, fontWeight: "600", textTransform: "uppercase", letterSpacing: "1px" }}>Net Worth</p>
-            <p style={{ margin: "8px 0 0", fontSize: "32px", ...S.mono, color: netWorth >= 0 ? T.accent : T.danger, letterSpacing: "-1px" }}>{fmt(netWorth)}</p>
-            <div style={{ display: "flex", justifyContent: "center", gap: "16px", marginTop: "10px", fontSize: "11px", color: T.textLight }}>
-              <span>Assets: <span style={{ ...S.mono, color: T.accent }}>{fmt(totalAssets)}</span></span>
-              <span>Debt: <span style={{ ...S.mono, color: T.danger }}>{fmt(totalLiabilities)}</span></span>
-            </div>
-          </div>
-        )}
+        {activeTab === "dashboard" && accounts.length > 0 && (() => {
+          const liquidTypes = ["checking", "savings", "cash"];
+          const liquid = accounts.filter(a => liquidTypes.includes(a.type)).reduce((s, a) => s + (a.balance || 0), 0);
+          const windowDays = view === "fortnightly" ? 14 : view === "monthly" ? 30 : 365;
+          const upcomingBills = items
+            .filter(i => !i.isIncome && i.dueDate)
+            .map(i => ({ ...i, dueDate: rollForwardDue(i.dueDate, i.frequency), days: 0 }))
+            .map(i => ({ ...i, days: daysUntil(i.dueDate) }))
+            .filter(i => i.days !== null && i.days >= 0 && i.days <= windowDays);
+          const billsTotal = upcomingBills.reduce((s, b) => s + (b.amount || 0), 0);
+          const safe = liquid - billsTotal;
+          const perDay = windowDays > 0 ? safe / windowDays : 0;
+          return (
+            <>
+              <div style={{ background: netWorth >= 0 ? T.accentBg : T.dangerBg, border: `1px solid ${netWorth >= 0 ? T.accentBorder : T.dangerBorder}`, borderRadius: "14px", padding: "16px", marginBottom: "10px", textAlign: "center" }}>
+                <p style={{ margin: 0, fontSize: "11px", color: T.textMuted, fontWeight: "600", textTransform: "uppercase", letterSpacing: "1px" }}>Net Worth</p>
+                <p style={{ margin: "6px 0 0", fontSize: "26px", ...S.mono, color: netWorth >= 0 ? T.accent : T.danger }}>{fmt(netWorth)}</p>
+                <div style={{ display: "flex", justifyContent: "center", gap: "16px", marginTop: "6px", fontSize: "10px", color: T.textLight }}>
+                  <span>Assets: <span style={{ ...S.mono, color: T.accent }}>{fmt(totalAssets)}</span></span>
+                  <span>Debt: <span style={{ ...S.mono, color: T.danger }}>{fmt(totalLiabilities)}</span></span>
+                </div>
+              </div>
+              {liquid > 0 && (
+                <div style={{ background: safe >= 0 ? T.accentBg : T.dangerBg, border: `1px solid ${safe >= 0 ? T.accentBorder : T.dangerBorder}`, borderRadius: "14px", padding: "20px", marginBottom: "16px", textAlign: "center" }}>
+                  <p style={{ margin: 0, fontSize: "11px", color: T.textMuted, fontWeight: "600", textTransform: "uppercase", letterSpacing: "1px" }}>Safe to Spend · next {windowDays} days</p>
+                  <p style={{ margin: "8px 0 0", fontSize: "32px", ...S.mono, color: safe >= 0 ? T.accent : T.danger, letterSpacing: "-1px" }}>{fmt(safe)}</p>
+                  <p style={{ margin: "4px 0 0", fontSize: "11px", color: T.textLight }}>{fmt(perDay)} per day</p>
+                  {billsTotal > 0 && <p style={{ margin: "6px 0 0", fontSize: "10px", color: T.textLight }}>{fmt(liquid)} available − {fmt(billsTotal)} upcoming bills</p>}
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {activeTab === "dashboard" && (items.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 20px", color: T.textLight }}>
