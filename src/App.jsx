@@ -396,6 +396,7 @@ export default function BudgetApp() {
             <p style={{ margin: "4px 0 0", fontSize: "12px", color: T.textLight }}>{items.length === 0 ? "Add items to get started" : `${items.length} items · ${goals.length} goals`}</p>
           </div>
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <button onClick={() => setActiveTab(activeTab === "settings" ? "dashboard" : "settings")} style={{ background: activeTab === "settings" ? T.accentBg : T.toggleBg, border: `1px solid ${activeTab === "settings" ? T.accentBorder : T.inputBorder}`, color: activeTab === "settings" ? T.accent : T.textMuted, padding: "8px 10px", borderRadius: "10px", fontSize: "16px", cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }} title="Settings">⚙</button>
             <button onClick={() => setDarkMode(!darkMode)} style={{ background: T.toggleBg, border: `1px solid ${T.inputBorder}`, color: T.textMuted, padding: "8px 10px", borderRadius: "10px", fontSize: "16px", cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }} title={darkMode ? "Light mode" : "Dark mode"}>{darkMode ? "☀" : "☾"}</button>
             <button onClick={() => { resetForm(); setShowForm(true); setActiveTab("items"); }} style={{ background: "linear-gradient(135deg, #16a34a, #15803d)", border: "none", color: "#fff", padding: "10px 18px", borderRadius: "10px", fontSize: "13px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(22,163,74,0.25)" }}>+ Add</button>
           </div>
@@ -678,7 +679,7 @@ export default function BudgetApp() {
           </>
         ))}
 
-        {activeTab === "dashboard" && (
+        {activeTab === "settings" && (
           <>
             <div style={S.card}>
               <h3 style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>Settings</h3>
@@ -1359,7 +1360,8 @@ export default function BudgetApp() {
                 {!aiKey ? (
                   <div>
                     <p style={{ margin: "0 0 8px", fontSize: "12px", color: T.textMuted, lineHeight: 1.5 }}>Chat with an AI advisor about your budget. Uses Google Gemini (free tier) — your data is sent to Google only when you chat.</p>
-                    <p style={{ margin: "0 0 10px", fontSize: "11px", color: T.textLight }}>Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: T.accent }}>aistudio.google.com/apikey</a> → paste it in Settings → come back here.</p>
+                    <p style={{ margin: "0 0 10px", fontSize: "11px", color: T.textLight }}>Get a free key: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: T.accent }}>aistudio.google.com/apikey</a></p>
+                    <button onClick={() => setActiveTab("settings")} style={{ width: "100%", padding: "10px", background: T.accentBg, border: `1px solid ${T.accentBorder}`, borderRadius: "8px", color: T.accent, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>⚙ Open Settings to paste key</button>
                   </div>
                 ) : (
                   <>
