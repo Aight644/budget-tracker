@@ -8,6 +8,7 @@ import { detectSubscriptions, detectRecurringIncome, guessCategoryFromDescriptio
 import { BANK_PRESETS } from "./lib/bankPresets.js";
 import { computeCoach, generateInsights, scoreLabel } from "./lib/coach.js";
 import { askGemini, buildFinancialContext, getStoredKey, storeKey } from "./lib/ai.js";
+import { hashPin, getStoredPinHash, storePinHash } from "./lib/pin.js";
 
 export default function BudgetApp() {
   const [items, setItems] = useState([]);
@@ -80,6 +81,12 @@ export default function BudgetApp() {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState(null);
+  const [pinHash, setPinHash] = useState(() => getStoredPinHash());
+  const [unlocked, setUnlocked] = useState(() => !getStoredPinHash());
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [pinDraft, setPinDraft] = useState("");
+  const [pinConfirm, setPinConfirm] = useState("");
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const fmt = useMemo(() => makeFmt(currency), [currency]);
 
@@ -263,6 +270,26 @@ export default function BudgetApp() {
     const all = [...incomes, ...subs];
     setDetectedSubs(all);
     setSelectedSubIds(new Set(all.map((s) => s.id)));
+  };
+
+  const tryUnlock = async () => {
+    if (pinInput.length < 4) return;
+    const h = await hashPin(pinInput);
+    if (h === pinHash) { setUnlocked(true); setPinInput(""); setPinError(""); }
+    else { setPinError("Wrong PIN"); setPinInput(""); }
+  };
+  const savePin = async () => {
+    if (!pinDraft || pinDraft.length < 4 || pinDraft !== pinConfirm) { showToast("PINs don't match or too short (4+ digits)", "err"); return; }
+    const h = await hashPin(pinDraft);
+    storePinHash(h);
+    setPinHash(h);
+    setPinDraft(""); setPinConfirm("");
+    showToast("PIN set", "ok");
+  };
+  const removePin = () => {
+    storePinHash("");
+    setPinHash("");
+    showToast("PIN removed", "ok");
   };
 
   const saveAiKey = () => {
@@ -476,6 +503,22 @@ export default function BudgetApp() {
     else { resetForm(); setShowForm(true); setActiveTab("items"); }
   };
   const fabVisible = ["dashboard", "items", "accounts", "transactions", "goals"].includes(activeTab) && !showForm && !showGoalForm && !showAccountForm && !showTxnForm && !csvState && !detectedSubs;
+
+  if (pinHash && !unlocked) {
+    return (
+      <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "'DM Sans', 'Segoe UI', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+        <div style={{ textAlign: "center", maxWidth: "360px", width: "100%" }}>
+          <p style={{ fontSize: "40px", margin: "0 0 10px", opacity: 0.5 }}>🔒</p>
+          <h2 style={{ fontSize: "18px", fontWeight: "600", margin: "0 0 6px" }}>Budget Tracker</h2>
+          <p style={{ fontSize: "13px", color: T.textMuted, margin: "0 0 24px" }}>Enter your PIN to unlock</p>
+          <input type="password" inputMode="numeric" pattern="[0-9]*" value={pinInput} onChange={(e) => { setPinInput(e.target.value.replace(/\D/g, "").slice(0, 8)); setPinError(""); }} onKeyDown={(e) => { if (e.key === "Enter") tryUnlock(); }} placeholder="••••" autoFocus style={{ ...S.input, textAlign: "center", fontSize: "24px", letterSpacing: "8px", padding: "16px", marginBottom: "10px" }} />
+          {pinError && <p style={{ margin: "0 0 10px", fontSize: "12px", color: T.danger }}>{pinError}</p>}
+          <button onClick={tryUnlock} style={{ ...S.greenBtn, width: "100%" }}>Unlock</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
@@ -907,6 +950,25 @@ export default function BudgetApp() {
                   {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
                 </select>
               </div>
+              <div style={{ marginBottom: "14px" }}>
+                <label style={S.label}>PIN Lock (optional)</label>
+                {pinHash ? (
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    <span style={{ flex: 1, padding: "8px 10px", background: T.accentBg, border: `1px solid ${T.accentBorder}`, borderRadius: "8px", fontSize: "11px", color: T.accent }}>🔒 PIN enabled</span>
+                    <button onClick={removePin} style={{ padding: "8px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "8px", color: T.textMuted, fontSize: "11px", cursor: "pointer", fontFamily: "inherit" }}>Remove PIN</button>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "6px" }}>
+                      <input type="password" inputMode="numeric" pattern="[0-9]*" value={pinDraft} onChange={(e) => setPinDraft(e.target.value.replace(/\D/g, "").slice(0, 8))} placeholder="New PIN" style={S.input} />
+                      <input type="password" inputMode="numeric" pattern="[0-9]*" value={pinConfirm} onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 8))} placeholder="Confirm" style={S.input} />
+                      <button onClick={savePin} disabled={pinDraft.length < 4 || pinDraft !== pinConfirm} style={{ padding: "10px 14px", background: T.accentBg, border: `1px solid ${T.accentBorder}`, borderRadius: "8px", color: T.accent, fontSize: "11px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", opacity: pinDraft.length < 4 || pinDraft !== pinConfirm ? 0.5 : 1 }}>Set</button>
+                    </div>
+                    <p style={{ margin: "4px 0 0", fontSize: "10px", color: T.textLight }}>4+ digits. Required every time you open the app.</p>
+                  </>
+                )}
+              </div>
+
               <div style={{ marginBottom: "14px" }}>
                 <label style={S.label}>AI Advisor (optional)</label>
                 {aiKey ? (
