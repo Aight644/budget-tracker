@@ -4,20 +4,20 @@ import { hashPin, storePinHash } from "../lib/pin.js";
 import { storeKey } from "../lib/ai.js";
 
 const L = {
-  blue: "#0B2545",
-  blueDeep: "#071A36",
-  blueSoft: "#E8EEF7",
-  ink: "#0F172A",
-  muted: "#64748B",
-  line: "#E4E8EF",
-  orange: "#F07A2E",
-  orangeSoft: "#FFE8D6",
-  bg: "#FAF7F2",
-  white: "#FFFFFF",
-  green: "#2E9E6A",
+  blue: "#1e40af",
+  blueDeep: "#1e3a8a",
+  blueSoft: "#eef2ff",
+  ink: "#0f172a",
+  muted: "#64748b",
+  line: "#e5e7eb",
+  orange: "#10b981",
+  orangeSoft: "rgba(16,185,129,0.14)",
+  bg: "#fafaf7",
+  white: "#ffffff",
+  green: "#10b981",
 };
 
-const font = { ui: "Inter, system-ui, sans-serif", serif: '"Instrument Serif", Georgia, serif' };
+const font = { ui: "'IBM Plex Sans', system-ui, sans-serif", serif: "'IBM Plex Serif', Georgia, serif" };
 
 function Logo({ size = 28, dark = false }) {
   const c = dark ? "#fff" : L.blue;
