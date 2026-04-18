@@ -548,6 +548,13 @@ export default function BudgetApp() {
               setGoals((p) => [...p, ...newGoals]);
             }
           }
+          if (data.categoryBudgets && typeof data.categoryBudgets === "object") {
+            setCategoryBudgets((p) => ({ ...p, ...data.categoryBudgets }));
+          }
+          const savedKey = (() => { try { return localStorage.getItem("budget-app-ai-key") || ""; } catch { return ""; } })();
+          if (savedKey) setAiKey(savedKey);
+          const savedHash = (() => { try { return localStorage.getItem("budget-app-pin-hash") || ""; } catch { return ""; } })();
+          if (savedHash) setPinHash(savedHash);
           setOnboarded(true);
           try { localStorage.setItem("budget-app-welcome-v1", "1"); } catch {}
           if (typeof window !== "undefined" && window.history?.replaceState) {

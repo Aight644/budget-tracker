@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { CURRENCIES } from "../lib/constants.js";
+import { CURRENCIES, CATEGORIES } from "../lib/constants.js";
+import { hashPin, storePinHash } from "../lib/pin.js";
+import { storeKey } from "../lib/ai.js";
 
 const L = {
   blue: "#0B2545",
@@ -452,25 +454,249 @@ function Done({ state, onFinish }) {
   );
 }
 
+// ── Screen: Budget setup ────────────────────────────
+function Budget({ state, setState, onNext, onBack, onSkip }) {
+  const defaults = { housing: 1800, food: 680, transport: 240, subscriptions: 95, personal: 180 };
+  const budgets = state.categoryBudgets || defaults;
+  const setBudget = (id, v) => setState({ ...state, categoryBudgets: { ...budgets, [id]: v } });
+  const shown = ["housing", "food", "transport", "subscriptions", "personal", "utilities", "savings"];
+  const total = shown.reduce((s, id) => s + (parseFloat(budgets[id]) || 0), 0);
+  return (
+    <div style={{ minHeight: "100dvh", background: L.bg, display: "flex", flexDirection: "column" }}>
+      <div style={{ padding: "60px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <BackBtn onClick={onBack} />
+        <ProgressDots idx={2} total={4} />
+        <button onClick={onSkip} style={{ fontFamily: font.ui, fontSize: 14, color: L.muted, width: 36, textAlign: "right", background: "none", border: "none", cursor: "pointer" }}>Skip</button>
+      </div>
+
+      <div style={{ padding: "40px 24px 0", flex: 1, overflow: "auto" }}>
+        <div style={{ fontFamily: font.serif, fontSize: 34, lineHeight: 1.1, color: L.ink, letterSpacing: -0.8 }}>
+          Set monthly<br />
+          <span style={{ fontStyle: "italic", color: L.orange }}>budgets.</span>
+        </div>
+        <div style={{ fontSize: 15, color: L.muted, marginTop: 10, fontFamily: font.ui, lineHeight: 1.5 }}>
+          Typical caps based on common spending. Tweak, or leave blank for no cap.
+        </div>
+
+        <div style={{ marginTop: 22, padding: "14px 16px", borderRadius: 14, background: "#fff", border: `1px solid ${L.line}`, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <div>
+            <div style={{ fontFamily: font.ui, fontSize: 12, color: L.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>Total caps</div>
+            <div style={{ fontFamily: font.serif, fontSize: 26, color: L.ink, letterSpacing: -0.4, marginTop: 2 }}>{total.toLocaleString()}</div>
+          </div>
+          <div style={{ fontFamily: font.ui, fontSize: 13, color: L.muted, fontWeight: 500 }}>per month</div>
+        </div>
+
+        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+          {shown.map((id) => {
+            const c = CATEGORIES.find((x) => x.id === id);
+            if (!c) return null;
+            return (
+              <div key={id} style={{ padding: "12px 14px", borderRadius: 14, background: "#fff", border: `1px solid ${L.line}`, display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 9, background: c.color + "22", color: c.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>{c.icon}</div>
+                <div style={{ flex: 1, fontFamily: font.ui, fontSize: 14, fontWeight: 600, color: L.ink }}>{c.label}</div>
+                <input type="number" inputMode="decimal" value={budgets[id] || ""} onChange={(e) => setBudget(id, parseFloat(e.target.value) || 0)} placeholder="0" style={{ width: 90, height: 40, borderRadius: 8, border: `1px solid ${L.line}`, padding: "0 10px", fontFamily: font.ui, fontSize: 14, fontWeight: 600, color: L.ink, textAlign: "right", background: L.bg, outline: "none" }} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ padding: "16px 24px 40px" }}>
+        <PrimaryBtn onClick={onNext}>Save budgets</PrimaryBtn>
+      </div>
+    </div>
+  );
+}
+
+// ── Screen: PIN setup ───────────────────────────────
+function PinStep({ onNext, onBack, onSkip }) {
+  const [pin, setPin] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [phase, setPhase] = useState("enter"); // enter | confirm
+  const [err, setErr] = useState("");
+  const val = phase === "enter" ? pin : confirm;
+  const setVal = phase === "enter" ? setPin : setConfirm;
+
+  const press = (k) => {
+    setErr("");
+    if (k === "⌫") { setVal(val.slice(0, -1)); return; }
+    if (val.length >= 8) return;
+    const next = val + k;
+    setVal(next);
+    if (next.length >= 4) {
+      if (phase === "enter") {
+        setTimeout(() => setPhase("confirm"), 200);
+      } else {
+        if (next === pin) {
+          hashPin(next).then((h) => { storePinHash(h); onNext(); });
+        } else {
+          setTimeout(() => { setConfirm(""); setErr("PINs don't match — try again"); setPhase("enter"); setPin(""); }, 400);
+        }
+      }
+    }
+  };
+
+  return (
+    <div style={{ minHeight: "100dvh", background: L.bg, display: "flex", flexDirection: "column" }}>
+      <div style={{ padding: "60px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <BackBtn onClick={onBack} />
+        <div style={{ fontFamily: font.ui, fontSize: 14, color: L.muted }}>Optional</div>
+        <button onClick={onSkip} style={{ fontFamily: font.ui, fontSize: 14, color: L.muted, width: 36, textAlign: "right", background: "none", border: "none", cursor: "pointer" }}>Skip</button>
+      </div>
+
+      <div style={{ padding: "40px 24px 0", flex: 1 }}>
+        <div style={{ width: 60, height: 60, borderRadius: 18, background: L.blueSoft, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
+          <svg width="24" height="30" viewBox="0 0 24 30" fill="none">
+            <rect x="2" y="12" width="20" height="16" rx="3" stroke={L.blue} strokeWidth="2" />
+            <path d="M6 12V8a6 6 0 0112 0v4" stroke={L.blue} strokeWidth="2" />
+          </svg>
+        </div>
+        <div style={{ fontFamily: font.serif, fontSize: 34, lineHeight: 1.1, color: L.ink, letterSpacing: -0.8 }}>
+          {phase === "enter" ? "Lock with a PIN." : "Once more."}
+        </div>
+        <div style={{ fontSize: 15, color: L.muted, marginTop: 10, fontFamily: font.ui, lineHeight: 1.5 }}>
+          {phase === "enter" ? "Your data stays on this device. A PIN keeps it yours even if someone else picks up the phone." : "Confirm the PIN to save it."}
+        </div>
+
+        <div style={{ marginTop: 36, display: "flex", justifyContent: "center", gap: 12 }}>
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} style={{
+              width: 56, height: 64, borderRadius: 14,
+              background: "#fff",
+              border: `1.5px solid ${val.length === i ? L.blue : L.line}`,
+              boxShadow: val.length === i ? `0 0 0 4px rgba(11,37,69,0.08)` : "none",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: font.ui, fontSize: 32, fontWeight: 600, color: L.ink,
+            }}>
+              {val.length > i ? "•" : ""}
+            </div>
+          ))}
+        </div>
+
+        {err && <p style={{ marginTop: 14, textAlign: "center", fontFamily: font.ui, fontSize: 13, color: "#dc2626" }}>{err}</p>}
+
+        <div style={{ marginTop: 40, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, padding: "0 10px" }}>
+          {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"].map((k, i) => (
+            <button key={i} onClick={() => k !== "" && press(k)} disabled={k === ""} style={{
+              height: 60, borderRadius: 16,
+              background: k === "" ? "transparent" : "#fff",
+              border: k === "" ? "none" : `1px solid ${L.line}`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: font.ui, fontSize: 22, fontWeight: 500, color: L.ink,
+              cursor: k === "" ? "default" : "pointer",
+            }}>{k}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Screen: AI Coach key ────────────────────────────
+function CoachStep({ onNext, onBack, onSkip }) {
+  const [key, setKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const save = () => {
+    const k = key.trim();
+    if (!k) return;
+    storeKey(k);
+    onNext();
+  };
+  return (
+    <div style={{ minHeight: "100dvh", background: L.bg, display: "flex", flexDirection: "column" }}>
+      <div style={{ padding: "60px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <BackBtn onClick={onBack} />
+        <div style={{ fontFamily: font.ui, fontSize: 14, color: L.muted }}>Optional</div>
+        <button onClick={onSkip} style={{ fontFamily: font.ui, fontSize: 14, color: L.muted, width: 36, textAlign: "right", background: "none", border: "none", cursor: "pointer" }}>Skip</button>
+      </div>
+
+      <div style={{ padding: "40px 24px 0", flex: 1, overflow: "auto" }}>
+        <div style={{ width: 60, height: 60, borderRadius: 18, background: `linear-gradient(135deg, ${L.orangeSoft}, ${L.blueSoft})`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
+          <div style={{ fontFamily: font.serif, fontSize: 32, color: L.orange, lineHeight: 1 }}>✦</div>
+        </div>
+        <div style={{ fontFamily: font.serif, fontSize: 34, lineHeight: 1.1, color: L.ink, letterSpacing: -0.8 }}>
+          Turn on <span style={{ fontStyle: "italic", color: L.orange }}>Coach.</span>
+        </div>
+        <div style={{ fontSize: 15, color: L.muted, marginTop: 10, fontFamily: font.ui, lineHeight: 1.5 }}>
+          Paste a Gemini API key and Coach answers questions about your money in plain language. Key lives only on this device.
+        </div>
+
+        <div style={{ marginTop: 32 }}>
+          <Label>Gemini API key</Label>
+          <div style={{
+            height: 60, background: "#fff", borderRadius: 16,
+            border: `1.5px solid ${key ? L.blue : L.line}`,
+            padding: "0 6px 0 20px", display: "flex", alignItems: "center", gap: 8,
+            boxShadow: key ? `0 0 0 4px rgba(11,37,69,0.08)` : "none",
+          }}>
+            <input
+              type={showKey ? "text" : "password"}
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              placeholder="AIzaS..."
+              style={{ flex: 1, height: "100%", border: "none", outline: "none", background: "transparent", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 14, color: L.ink }}
+            />
+            <button onClick={() => setShowKey(!showKey)} style={{ padding: "6px 10px", background: "transparent", border: "none", fontFamily: font.ui, fontSize: 12, color: L.muted, cursor: "pointer" }}>{showKey ? "Hide" : "Show"}</button>
+          </div>
+          <div style={{ marginTop: 8, fontFamily: font.ui, fontSize: 12, color: L.muted, lineHeight: 1.5 }}>
+            Get one free at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: L.blue, textDecoration: "underline" }}>aistudio.google.com/apikey</a>. Stored in your browser only.
+          </div>
+        </div>
+
+        <div style={{ marginTop: 28 }}>
+          <Label>What you can ask</Label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {[
+              "Can I afford a 3-week trip to Japan?",
+              "What's my biggest money leak this month?",
+              "How fast could I pay off my credit card?",
+            ].map((q) => (
+              <div key={q} style={{
+                padding: "12px 14px", borderRadius: 12, background: "#fff",
+                border: `1px solid ${L.line}`,
+                fontFamily: font.ui, fontSize: 14, color: L.ink,
+                display: "flex", alignItems: "center", gap: 10,
+              }}>
+                <div style={{ color: L.orange, fontSize: 16 }}>▸</div>
+                <div style={{ flex: 1 }}>{q}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding: "16px 24px 40px" }}>
+        <PrimaryBtn onClick={save} disabled={!key.trim()} style={{ marginBottom: 10 }}>Enable Coach</PrimaryBtn>
+        <PrimaryBtn onClick={onSkip} ghost>Not now</PrimaryBtn>
+      </div>
+    </div>
+  );
+}
+
 // ── Container ───────────────────────────────────────
 export default function Onboarding({ initialCurrency, onComplete }) {
   const [step, setStep] = useState(0);
-  const [state, setState] = useState({ currency: initialCurrency || "AUD", payday: "Fortnightly", goals: new Set() });
+  const [state, setState] = useState({ currency: initialCurrency || "AUD", payday: "Fortnightly", goals: new Set(), categoryBudgets: null });
 
   const finish = (extra = {}) => {
     onComplete({
       currency: state.currency,
       goals: Array.from(state.goals),
+      categoryBudgets: state.categoryBudgets,
       ...extra,
     });
   };
 
-  const next = () => setStep((s) => Math.min(s + 1, 4));
+  const TOTAL = 7;
+  const next = () => setStep((s) => Math.min(s + 1, TOTAL));
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
   if (step === 0) return <Welcome onNext={next} />;
   if (step === 1) return <Profile state={state} setState={setState} onNext={next} onBack={back} />;
   if (step === 2) return <Goals state={state} setState={setState} onNext={next} onBack={back} onSkip={next} />;
   if (step === 3) return <Connect onBack={back} onNext={(choice) => { setState({ ...state, choice }); setStep(4); }} onSkip={() => setStep(4)} />;
+  if (step === 4) return <Budget state={state} setState={setState} onNext={next} onBack={back} onSkip={next} />;
+  if (step === 5) return <PinStep onNext={next} onBack={back} onSkip={next} />;
+  if (step === 6) return <CoachStep onNext={next} onBack={back} onSkip={next} />;
   return <Done state={state} onFinish={() => finish({ action: state.choice })} />;
 }
