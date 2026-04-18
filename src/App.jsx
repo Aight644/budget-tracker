@@ -655,6 +655,73 @@ export default function BudgetApp() {
             })()}
 
             {(() => {
+              const now = new Date();
+              const dayOfMonth = now.getDate();
+              const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+              const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+              const monthTxns = transactions.filter(t => !t.isIncome && !t.isTransfer && (t.date || "").slice(0, 7) === ym);
+              const alerts = [];
+              for (const [catId, budget] of Object.entries(categoryBudgets)) {
+                if (!budget || budget <= 0) continue;
+                const spent = monthTxns.filter(t => t.category === catId).reduce((s, t) => s + (t.amount || 0), 0);
+                if (spent === 0) continue;
+                const pace = (spent / dayOfMonth) * daysInMonth;
+                if (pace > budget * 1.1) {
+                  const overBy = pace - budget;
+                  const cat = CATEGORIES.find(c => c.id === catId) || { label: catId, icon: "•", color: T.danger };
+                  const runoutDay = Math.ceil((budget / spent) * dayOfMonth);
+                  alerts.push({ cat, budget, spent, pace, overBy, runoutDay, pct: (spent / budget) * 100 });
+                }
+              }
+              if (alerts.length === 0) return null;
+              return (
+                <div style={S.card}>
+                  <h3 style={{ margin: "0 0 12px", fontSize: "13px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>⚠ Spending velocity</h3>
+                  {alerts.map((a, i) => (
+                    <div key={i} style={{ background: T.dangerBg, border: `1px solid ${T.dangerBorder}`, borderRadius: "10px", padding: "10px 12px", marginBottom: "6px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                        <span style={{ color: a.cat.color, fontSize: "12px" }}>{a.cat.icon}</span>
+                        <span style={{ fontSize: "13px", fontWeight: "600" }}>{a.cat.label}</span>
+                      </div>
+                      <p style={{ margin: "0 0 0 18px", fontSize: "11px", color: T.text, lineHeight: 1.5 }}>At current pace you'll spend <span style={{ ...S.mono, color: T.danger }}>{fmt(a.pace)}</span> — {fmt(a.overBy)} over budget. {a.runoutDay <= daysInMonth ? `Budget runs out on day ${a.runoutDay}.` : ""}</p>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {(() => {
+              if (transactions.length < 5) return null;
+              const now = new Date();
+              const months = [];
+              for (let i = 1; i <= 3; i++) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+              }
+              const perMonth = months.map(ym => transactions.filter(t => !t.isIncome && !t.isTransfer && (t.date || "").slice(0, 7) === ym).reduce((s, t) => s + (t.amount || 0), 0)).filter(x => x > 0);
+              if (perMonth.length < 1) return null;
+              const avg = perMonth.reduce((s, x) => s + x, 0) / perMonth.length;
+              const max = Math.max(...perMonth);
+              const min = Math.min(...perMonth);
+              return (
+                <div style={S.card}>
+                  <h3 style={{ margin: "0 0 6px", fontSize: "13px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>Forecast</h3>
+                  <p style={{ margin: "0 0 10px", fontSize: "11px", color: T.textLight }}>Based on last {perMonth.length} month{perMonth.length > 1 ? "s" : ""} of activity</p>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                    <div style={{ background: T.inputBg, borderRadius: "10px", padding: "10px" }}>
+                      <p style={{ margin: 0, fontSize: "10px", color: T.textLight, textTransform: "uppercase" }}>Expected next month</p>
+                      <p style={{ margin: "4px 0 0", fontSize: "16px", ...S.mono, color: T.danger }}>{fmt(avg)}</p>
+                    </div>
+                    <div style={{ background: T.inputBg, borderRadius: "10px", padding: "10px" }}>
+                      <p style={{ margin: 0, fontSize: "10px", color: T.textLight, textTransform: "uppercase" }}>Range</p>
+                      <p style={{ margin: "4px 0 0", fontSize: "13px", ...S.mono, color: T.textMuted }}>{fmt(min)} – {fmt(max)}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {(() => {
               const budgetedCats = Object.keys(categoryBudgets).filter(k => (categoryBudgets[k] || 0) > 0);
               if (budgetedCats.length === 0) return null;
               const now = new Date();
