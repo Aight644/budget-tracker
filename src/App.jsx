@@ -16,6 +16,7 @@ import AuthScreen from "./components/AuthScreen.jsx";
 import { PrivacyPage, TermsPage, AboutPage } from "./components/LegalPages.jsx";
 import { pullUserData, schedulePush, signOut, getCurrentUser, onAuthChange } from "./lib/sync.js";
 import DashboardView from "./components/DashboardView.jsx";
+import SubscriptionsView from "./components/SubscriptionsView.jsx";
 import { Sidebar, MobileTopBar, MobileTabBar } from "./components/AppShell.jsx";
 import { makeTheme, FONT as DESIGN_FONT } from "./lib/theme.js";
 import { toFn } from "./lib/calc.js";
@@ -774,6 +775,19 @@ export default function BudgetApp() {
             user={user}
             state={{ items, accounts, transactions, goals, categoryBudgets }}
             actions={{ setActiveTab }}
+          />
+        )}
+
+        {/* SUBSCRIPTIONS — new */}
+        {activeTab === "subscriptions" && (
+          <SubscriptionsView
+            T={makeTheme({ dark: !!darkMode })}
+            fmt={fmt}
+            items={items}
+            transactions={transactions}
+            onDetect={runDetectSubs}
+            onAddItem={() => { resetForm(); setFormData({ ...formData, category: "subscriptions" }); setShowForm(true); setActiveTab("items"); }}
+            onToggleCancel={(id, cancel) => setItems((p) => p.map((x) => x.id === id ? { ...x, cancelled: cancel, cancelledAt: cancel ? new Date().toISOString().slice(0, 10) : undefined } : x))}
           />
         )}
 
