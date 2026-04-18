@@ -22,7 +22,18 @@ export default function BudgetApp() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleteGoalConfirm, setDeleteGoalConfirm] = useState(null);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== "undefined" && window.matchMedia) {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+    return false;
+  });
+  const [darkModeAuto, setDarkModeAuto] = useState(true);
+  const [toast, setToast] = useState(null);
+  const showToast = (text, type = "ok") => {
+    setToast({ text, type, id: Date.now() });
+    setTimeout(() => setToast(null), 3000);
+  };
   const [accounts, setAccounts] = useState([]);
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState(null);
@@ -68,17 +79,27 @@ export default function BudgetApp() {
       if (Array.isArray(d.transactions)) setTransactions(d.transactions);
       if (d.categoryBudgets && typeof d.categoryBudgets === "object") setCategoryBudgets(d.categoryBudgets);
       if (d.view) setView(d.view);
-      if (d.darkMode !== undefined) setDarkMode(d.darkMode);
+      if (d.darkModeAuto !== undefined) setDarkModeAuto(d.darkModeAuto);
+      if (d.darkMode !== undefined && d.darkModeAuto === false) setDarkMode(d.darkMode);
       if (d.currency && CURRENCIES.some((c) => c.code === d.currency)) setCurrency(d.currency);
     }
     setLoaded(true);
   }, []);
 
   useEffect(() => {
+    if (!darkModeAuto || typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e) => setDarkMode(e.matches);
+    setDarkMode(mq.matches);
+    mq.addEventListener?.("change", handler);
+    return () => mq.removeEventListener?.("change", handler);
+  }, [darkModeAuto]);
+
+  useEffect(() => {
     if (!loaded) return;
-    const r = saveStored({ items, goals, accounts, transactions, categoryBudgets, view, darkMode, currency });
+    const r = saveStored({ items, goals, accounts, transactions, categoryBudgets, view, darkMode, darkModeAuto, currency });
     setSaveError(r.ok ? null : r.error);
-  }, [items, goals, accounts, transactions, categoryBudgets, view, darkMode, currency, loaded]);
+  }, [items, goals, accounts, transactions, categoryBudgets, view, darkMode, darkModeAuto, currency, loaded]);
 
   const handleExport = () => {
     const payload = { version: SCHEMA_VERSION, exportedAt: new Date().toISOString(), items, goals, accounts, transactions, categoryBudgets, view, darkMode, currency };
@@ -384,9 +405,25 @@ export default function BudgetApp() {
     </div>
   ) : <button onClick={() => setConfirm(id)} style={{ padding: "4px 8px", background: "transparent", border: "none", color: T.textLight, fontSize: "16px", cursor: "pointer", lineHeight: 1 }}>×</button>;
 
+  const fabAction = () => {
+    if (activeTab === "transactions") { resetTxnForm(); setShowTxnForm(true); }
+    else if (activeTab === "accounts") { resetAccountForm(); setShowAccountForm(true); }
+    else if (activeTab === "goals") { resetGoalForm(); setShowGoalForm(true); }
+    else { resetForm(); setShowForm(true); setActiveTab("items"); }
+  };
+  const fabVisible = ["dashboard", "items", "accounts", "transactions", "goals"].includes(activeTab) && !showForm && !showGoalForm && !showAccountForm && !showTxnForm && !csvState && !detectedSubs;
+
   return (
     <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+
+      {toast && (
+        <div className="toast" style={{ position: "fixed", top: "16px", left: "50%", transform: "translateX(-50%)", zIndex: 1000, padding: "10px 18px", background: toast.type === "err" ? T.danger : T.accent, color: "#fff", borderRadius: "999px", fontSize: "13px", fontWeight: "600", boxShadow: "0 4px 16px rgba(0,0,0,0.2)", maxWidth: "90vw" }}>{toast.text}</div>
+      )}
+
+      {fabVisible && (
+        <button className="fab" onClick={fabAction} title="Quick add" style={{ position: "fixed", bottom: "24px", right: "24px", zIndex: 900, width: "56px", height: "56px", borderRadius: "50%", background: "linear-gradient(135deg, #16a34a, #15803d)", color: "#fff", border: "none", fontSize: "28px", fontWeight: "300", cursor: "pointer", boxShadow: "0 4px 20px rgba(22,163,74,0.4)", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>+</button>
+      )}
 
       {/* HEADER */}
       <div style={{ padding: "24px 20px 16px", borderBottom: `1px solid ${T.tabBorder}`, background: T.headerBg }}>
@@ -397,7 +434,7 @@ export default function BudgetApp() {
           </div>
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
             <button onClick={() => setActiveTab(activeTab === "settings" ? "dashboard" : "settings")} style={{ background: activeTab === "settings" ? T.accentBg : T.toggleBg, border: `1px solid ${activeTab === "settings" ? T.accentBorder : T.inputBorder}`, color: activeTab === "settings" ? T.accent : T.textMuted, padding: "8px 10px", borderRadius: "10px", fontSize: "16px", cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }} title="Settings">⚙</button>
-            <button onClick={() => setDarkMode(!darkMode)} style={{ background: T.toggleBg, border: `1px solid ${T.inputBorder}`, color: T.textMuted, padding: "8px 10px", borderRadius: "10px", fontSize: "16px", cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }} title={darkMode ? "Light mode" : "Dark mode"}>{darkMode ? "☀" : "☾"}</button>
+            <button onClick={() => { setDarkModeAuto(false); setDarkMode(!darkMode); }} style={{ background: T.toggleBg, border: `1px solid ${T.inputBorder}`, color: T.textMuted, padding: "8px 10px", borderRadius: "10px", fontSize: "16px", cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }} title={darkMode ? "Light mode" : "Dark mode"}>{darkMode ? "☀" : "☾"}</button>
             <button onClick={() => { resetForm(); setShowForm(true); setActiveTab("items"); }} style={{ background: "linear-gradient(135deg, #16a34a, #15803d)", border: "none", color: "#fff", padding: "10px 18px", borderRadius: "10px", fontSize: "13px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(22,163,74,0.25)" }}>+ Add</button>
           </div>
         </div>
