@@ -59,7 +59,7 @@ export default function BudgetApp() {
   const [transactions, setTransactions] = useState([]);
   const [showTxnForm, setShowTxnForm] = useState(false);
   const [editingTxnId, setEditingTxnId] = useState(null);
-  const [txnFormData, setTxnFormData] = useState({ accountId: "", amount: "", category: "other", date: new Date().toISOString().slice(0, 10), note: "", isIncome: false, isTransfer: false, fromAccountId: "", toAccountId: "", splits: [] });
+  const [txnFormData, setTxnFormData] = useState({ accountId: "", amount: "", category: "other", date: new Date().toISOString().slice(0, 10), note: "", isIncome: false, isTransfer: false, fromAccountId: "", toAccountId: "", splits: [], tags: "" });
   const [deleteTxnConfirm, setDeleteTxnConfirm] = useState(null);
   const [txnFilterAccount, setTxnFilterAccount] = useState("all");
   const [txnFilterCategory, setTxnFilterCategory] = useState("all");
@@ -210,7 +210,7 @@ export default function BudgetApp() {
     setShowAccountForm(true);
   };
 
-  const resetTxnForm = () => { setTxnFormData({ accountId: accounts[0]?.id || "", amount: "", category: "other", date: new Date().toISOString().slice(0, 10), note: "", isIncome: false, isTransfer: false, fromAccountId: accounts[0]?.id || "", toAccountId: accounts[1]?.id || "", splits: [] }); setEditingTxnId(null); setShowTxnForm(false); };
+  const resetTxnForm = () => { setTxnFormData({ accountId: accounts[0]?.id || "", amount: "", category: "other", date: new Date().toISOString().slice(0, 10), note: "", isIncome: false, isTransfer: false, fromAccountId: accounts[0]?.id || "", toAccountId: accounts[1]?.id || "", splits: [], tags: "" }); setEditingTxnId(null); setShowTxnForm(false); };
 
   const handleCsvFile = (e) => {
     const file = e.target.files?.[0];
@@ -332,7 +332,8 @@ export default function BudgetApp() {
       const sum = splits.reduce((s, x) => s + parseFloat(x.amount || 0), 0);
       if (Math.abs(sum - amt) > 0.01) { showToast("Split amounts must total " + amt.toFixed(2), "err"); return; }
     }
-    const clean = { ...txnFormData, amount: amt, note: txnFormData.note.trim(), splits: splits.map(s => ({ category: s.category, amount: parseFloat(s.amount) })) };
+    const tags = (txnFormData.tags || "").split(",").map(t => t.trim().toLowerCase()).filter(Boolean);
+    const clean = { ...txnFormData, amount: amt, note: txnFormData.note.trim(), tags, splits: splits.map(s => ({ category: s.category, amount: parseFloat(s.amount) })) };
     if (editingTxnId) setTransactions(p => p.map(t => t.id === editingTxnId ? { ...t, ...clean } : t));
     else setTransactions(p => [...p, { ...clean, id: Date.now().toString() }]);
     resetTxnForm();
@@ -350,6 +351,7 @@ export default function BudgetApp() {
       fromAccountId: t.fromAccountId || "",
       toAccountId: t.toAccountId || "",
       splits: (t.splits || []).map(s => ({ category: s.category, amount: s.amount.toString() })),
+      tags: (t.tags || []).join(", "),
     });
     setEditingTxnId(t.id);
     setShowTxnForm(true);
@@ -729,6 +731,34 @@ export default function BudgetApp() {
                       <p style={{ margin: "0 0 0 18px", fontSize: "11px", color: T.text, lineHeight: 1.5 }}>At current pace you'll spend <span style={{ ...S.mono, color: T.danger }}>{fmt(a.pace)}</span> — {fmt(a.overBy)} over budget. {a.runoutDay <= daysInMonth ? `Budget runs out on day ${a.runoutDay}.` : ""}</p>
                     </div>
                   ))}
+                </div>
+              );
+            })()}
+
+            {(() => {
+              const now = new Date();
+              const thisYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+              const lastYrYm = `${now.getFullYear() - 1}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+              const thisSpend = transactions.filter(t => !t.isIncome && !t.isTransfer && (t.date || "").slice(0, 7) === thisYm).reduce((s, t) => s + (t.amount || 0), 0);
+              const lastSpend = transactions.filter(t => !t.isIncome && !t.isTransfer && (t.date || "").slice(0, 7) === lastYrYm).reduce((s, t) => s + (t.amount || 0), 0);
+              if (lastSpend === 0) return null;
+              const diff = thisSpend - lastSpend;
+              const pct = (diff / lastSpend) * 100;
+              const monthName = now.toLocaleDateString(undefined, { month: "long" });
+              return (
+                <div style={S.card}>
+                  <h3 style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>{monthName} · Year-over-Year</h3>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                    <div style={{ background: T.inputBg, borderRadius: "10px", padding: "10px" }}>
+                      <p style={{ margin: 0, fontSize: "10px", color: T.textLight, textTransform: "uppercase" }}>This {monthName}</p>
+                      <p style={{ margin: "4px 0 0", fontSize: "15px", ...S.mono, color: T.text }}>{fmt(thisSpend)}</p>
+                    </div>
+                    <div style={{ background: T.inputBg, borderRadius: "10px", padding: "10px" }}>
+                      <p style={{ margin: 0, fontSize: "10px", color: T.textLight, textTransform: "uppercase" }}>Last year</p>
+                      <p style={{ margin: "4px 0 0", fontSize: "15px", ...S.mono, color: T.textMuted }}>{fmt(lastSpend)}</p>
+                    </div>
+                  </div>
+                  <p style={{ margin: "10px 0 0", fontSize: "12px", color: diff > 0 ? T.danger : T.accent, textAlign: "center", ...S.mono }}>{diff >= 0 ? "↑" : "↓"} {fmt(Math.abs(diff))} ({pct >= 0 ? "+" : ""}{pct.toFixed(1)}%)</p>
                 </div>
               );
             })()}
@@ -1165,7 +1195,8 @@ export default function BudgetApp() {
               if (!q) return true;
               const cat = CATEGORIES.find(c => c.id === t.category)?.label || "";
               const acct = accounts.find(a => a.id === t.accountId)?.name || "";
-              return [t.note, cat, acct, t.date, String(t.amount)].some(v => (v || "").toLowerCase().includes(q));
+              const tagStr = (t.tags || []).join(" ");
+              return [t.note, cat, acct, t.date, String(t.amount), tagStr].some(v => (v || "").toLowerCase().includes(q));
             })
             .slice()
             .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
@@ -1248,9 +1279,13 @@ export default function BudgetApp() {
                       </div>
                     </>
                   )}
-                  <div style={{ marginBottom: "14px" }}>
+                  <div style={{ marginBottom: "10px" }}>
                     <label style={S.label}>Note (optional)</label>
                     <input type="text" value={txnFormData.note} onChange={e => setTxnFormData({ ...txnFormData, note: e.target.value })} placeholder="e.g. Coffee with Sam" style={S.input} />
+                  </div>
+                  <div style={{ marginBottom: "14px" }}>
+                    <label style={S.label}>Tags (comma-separated, optional)</label>
+                    <input type="text" value={txnFormData.tags} onChange={e => setTxnFormData({ ...txnFormData, tags: e.target.value })} placeholder="e.g. vacation, work, gift" style={S.input} />
                   </div>
                   <div style={{ display: "flex", gap: "8px" }}>
                     <button onClick={handleTxnSubmit} style={S.greenBtn}>{editingTxnId ? "Update" : "Add"}</button>
@@ -1468,6 +1503,7 @@ export default function BudgetApp() {
                                 <span style={{ color: c.color, fontSize: "12px" }}>{c.icon}</span>
                                 <p style={{ margin: 0, fontSize: "13px", fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.note || c.label}</p>
                                 {t.splits?.length > 0 && <span style={{ fontSize: "10px", color: T.textLight, background: T.inputBg, padding: "1px 6px", borderRadius: "4px" }}>split</span>}
+                                {(t.tags || []).slice(0, 2).map(tag => <span key={tag} style={{ fontSize: "9px", color: T.textMuted, background: T.inputBg, padding: "1px 6px", borderRadius: "4px" }}>#{tag}</span>)}
                               </div>
                               <p style={{ margin: "2px 0 0 18px", fontSize: "10px", color: T.textLight }}>{t.date} {t.accountId && `· ${acctName(t.accountId)}`}</p>
                             </div>
