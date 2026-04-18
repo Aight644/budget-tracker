@@ -24,7 +24,7 @@ export function computeCoach({ items, goals, accounts, transactions, categoryBud
 
   const now = new Date();
   const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const currentMonthTxns = transactions.filter((t) => !t.isIncome && (t.date || "").slice(0, 7) === ym);
+  const currentMonthTxns = transactions.filter((t) => !t.isIncome && !t.isTransfer && (t.date || "").slice(0, 7) === ym);
 
   const categoriesOverBudget = [];
   for (const [catId, budget] of Object.entries(categoryBudgets || {})) {

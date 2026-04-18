@@ -59,7 +59,7 @@ export default function BudgetApp() {
   const [transactions, setTransactions] = useState([]);
   const [showTxnForm, setShowTxnForm] = useState(false);
   const [editingTxnId, setEditingTxnId] = useState(null);
-  const [txnFormData, setTxnFormData] = useState({ accountId: "", amount: "", category: "other", date: new Date().toISOString().slice(0, 10), note: "", isIncome: false });
+  const [txnFormData, setTxnFormData] = useState({ accountId: "", amount: "", category: "other", date: new Date().toISOString().slice(0, 10), note: "", isIncome: false, isTransfer: false, fromAccountId: "", toAccountId: "", splits: [] });
   const [deleteTxnConfirm, setDeleteTxnConfirm] = useState(null);
   const [txnFilterAccount, setTxnFilterAccount] = useState("all");
   const [txnFilterCategory, setTxnFilterCategory] = useState("all");
@@ -186,7 +186,7 @@ export default function BudgetApp() {
     setShowAccountForm(true);
   };
 
-  const resetTxnForm = () => { setTxnFormData({ accountId: accounts[0]?.id || "", amount: "", category: "other", date: new Date().toISOString().slice(0, 10), note: "", isIncome: false }); setEditingTxnId(null); setShowTxnForm(false); };
+  const resetTxnForm = () => { setTxnFormData({ accountId: accounts[0]?.id || "", amount: "", category: "other", date: new Date().toISOString().slice(0, 10), note: "", isIncome: false, isTransfer: false, fromAccountId: accounts[0]?.id || "", toAccountId: accounts[1]?.id || "", splits: [] }); setEditingTxnId(null); setShowTxnForm(false); };
 
   const handleCsvFile = (e) => {
     const file = e.target.files?.[0];
@@ -298,14 +298,33 @@ export default function BudgetApp() {
     if (!txnFormData.amount || !txnFormData.date) return;
     const amt = parseFloat(txnFormData.amount);
     if (!isFinite(amt) || amt < 0) return;
-    const clean = { ...txnFormData, amount: amt, note: txnFormData.note.trim() };
+    if (txnFormData.isTransfer) {
+      if (!txnFormData.fromAccountId || !txnFormData.toAccountId || txnFormData.fromAccountId === txnFormData.toAccountId) return;
+    }
+    const splits = (txnFormData.splits || []).filter(s => s.amount && parseFloat(s.amount) > 0);
+    if (splits.length > 0) {
+      const sum = splits.reduce((s, x) => s + parseFloat(x.amount || 0), 0);
+      if (Math.abs(sum - amt) > 0.01) { showToast("Split amounts must total " + amt.toFixed(2), "err"); return; }
+    }
+    const clean = { ...txnFormData, amount: amt, note: txnFormData.note.trim(), splits: splits.map(s => ({ category: s.category, amount: parseFloat(s.amount) })) };
     if (editingTxnId) setTransactions(p => p.map(t => t.id === editingTxnId ? { ...t, ...clean } : t));
     else setTransactions(p => [...p, { ...clean, id: Date.now().toString() }]);
     resetTxnForm();
   };
 
   const startEditTxn = (t) => {
-    setTxnFormData({ accountId: t.accountId || "", amount: t.amount.toString(), category: t.category || "other", date: t.date || new Date().toISOString().slice(0, 10), note: t.note || "", isIncome: !!t.isIncome });
+    setTxnFormData({
+      accountId: t.accountId || "",
+      amount: t.amount.toString(),
+      category: t.category || "other",
+      date: t.date || new Date().toISOString().slice(0, 10),
+      note: t.note || "",
+      isIncome: !!t.isIncome,
+      isTransfer: !!t.isTransfer,
+      fromAccountId: t.fromAccountId || "",
+      toAccountId: t.toAccountId || "",
+      splits: (t.splits || []).map(s => ({ category: s.category, amount: s.amount.toString() })),
+    });
     setEditingTxnId(t.id);
     setShowTxnForm(true);
   };
@@ -640,7 +659,7 @@ export default function BudgetApp() {
               if (budgetedCats.length === 0) return null;
               const now = new Date();
               const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-              const monthTxns = transactions.filter(t => !t.isIncome && (t.date || "").slice(0, 7) === ym);
+              const monthTxns = transactions.filter(t => !t.isIncome && !t.isTransfer && (t.date || "").slice(0, 7) === ym);
               return (
                 <div style={S.card}>
                   <h3 style={{ margin: "0 0 12px", fontSize: "13px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>This Month's Budgets</h3>
@@ -1004,7 +1023,7 @@ export default function BudgetApp() {
           };
           const acctName = (id) => accounts.find(a => a.id === id)?.name || "—";
           const catInfo = (id) => CATEGORIES.find(c => c.id === id) || { label: id, icon: "•", color: T.textMuted };
-          const monthTotal = (list) => list.reduce((s, t) => s + (t.isIncome ? 1 : -1) * (t.amount || 0), 0);
+          const monthTotal = (list) => list.reduce((s, t) => t.isTransfer ? s : s + (t.isIncome ? 1 : -1) * (t.amount || 0), 0);
 
           return (
             <>
@@ -1012,29 +1031,64 @@ export default function BudgetApp() {
                 <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "14px", padding: "16px", marginBottom: "16px", boxShadow: T.cardShadow }}>
                   <h3 style={{ margin: "0 0 14px", fontSize: "14px", fontWeight: "600" }}>{editingTxnId ? "Edit Transaction" : "Add Transaction"}</h3>
                   <div style={{ display: "flex", gap: "4px", background: T.toggleBg, borderRadius: "8px", padding: "3px", marginBottom: "12px" }}>
-                    <button onClick={() => setTxnFormData({ ...txnFormData, isIncome: false, category: txnFormData.category === "income" ? "other" : txnFormData.category })} style={{ flex: 1, padding: "8px", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", background: !txnFormData.isIncome ? T.dangerBg : "transparent", color: !txnFormData.isIncome ? T.danger : T.textLight }}>Expense</button>
-                    <button onClick={() => setTxnFormData({ ...txnFormData, isIncome: true, category: "income" })} style={{ flex: 1, padding: "8px", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", background: txnFormData.isIncome ? T.accentBg : "transparent", color: txnFormData.isIncome ? T.accent : T.textLight }}>Income</button>
+                    <button onClick={() => setTxnFormData({ ...txnFormData, isIncome: false, isTransfer: false, category: txnFormData.category === "income" ? "other" : txnFormData.category })} style={{ flex: 1, padding: "8px", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", background: !txnFormData.isIncome && !txnFormData.isTransfer ? T.dangerBg : "transparent", color: !txnFormData.isIncome && !txnFormData.isTransfer ? T.danger : T.textLight }}>Expense</button>
+                    <button onClick={() => setTxnFormData({ ...txnFormData, isIncome: true, isTransfer: false, category: "income" })} style={{ flex: 1, padding: "8px", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", background: txnFormData.isIncome ? T.accentBg : "transparent", color: txnFormData.isIncome ? T.accent : T.textLight }}>Income</button>
+                    <button onClick={() => setTxnFormData({ ...txnFormData, isIncome: false, isTransfer: true })} style={{ flex: 1, padding: "8px", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", background: txnFormData.isTransfer ? T.inputBg : "transparent", color: txnFormData.isTransfer ? T.text : T.textLight }}>Transfer</button>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
                     <div><label style={S.label}>Amount</label><input type="number" value={txnFormData.amount} onChange={e => setTxnFormData({ ...txnFormData, amount: e.target.value })} placeholder="0.00" style={S.input} /></div>
                     <div><label style={S.label}>Date</label><input type="date" value={txnFormData.date} onChange={e => setTxnFormData({ ...txnFormData, date: e.target.value })} style={S.input} /></div>
                   </div>
-                  <div style={{ marginBottom: "10px" }}>
-                    <label style={S.label}>Account</label>
-                    <select value={txnFormData.accountId} onChange={e => setTxnFormData({ ...txnFormData, accountId: e.target.value })} style={S.input}>
-                      <option value="">— No account —</option>
-                      {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                    </select>
-                  </div>
-                  {!txnFormData.isIncome && (
-                    <div style={{ marginBottom: "10px" }}>
-                      <label style={S.label}>Category</label>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px" }}>
-                        {CATEGORIES.filter(c => c.id !== "income").map(c => (
-                          <button key={c.id} onClick={() => setTxnFormData({ ...txnFormData, category: c.id })} style={{ padding: "8px 6px", border: txnFormData.category === c.id ? `2px solid ${c.color}` : `1px solid ${T.inputBorder}`, borderRadius: "8px", background: txnFormData.category === c.id ? `${c.color}10` : T.catBtnBg, color: txnFormData.category === c.id ? c.color : T.textMuted, fontSize: "11px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>{c.icon} {c.label}</button>
-                        ))}
+                  {txnFormData.isTransfer ? (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                      <div><label style={S.label}>From</label>
+                        <select value={txnFormData.fromAccountId} onChange={e => setTxnFormData({ ...txnFormData, fromAccountId: e.target.value })} style={S.input}>
+                          <option value="">— select —</option>
+                          {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
+                      </div>
+                      <div><label style={S.label}>To</label>
+                        <select value={txnFormData.toAccountId} onChange={e => setTxnFormData({ ...txnFormData, toAccountId: e.target.value })} style={S.input}>
+                          <option value="">— select —</option>
+                          {accounts.filter(a => a.id !== txnFormData.fromAccountId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
                       </div>
                     </div>
+                  ) : (
+                    <div style={{ marginBottom: "10px" }}>
+                      <label style={S.label}>Account</label>
+                      <select value={txnFormData.accountId} onChange={e => setTxnFormData({ ...txnFormData, accountId: e.target.value })} style={S.input}>
+                        <option value="">— No account —</option>
+                        {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {!txnFormData.isIncome && !txnFormData.isTransfer && (
+                    <>
+                      <div style={{ marginBottom: "10px" }}>
+                        <label style={S.label}>Category</label>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px" }}>
+                          {CATEGORIES.filter(c => c.id !== "income").map(c => (
+                            <button key={c.id} onClick={() => setTxnFormData({ ...txnFormData, category: c.id })} style={{ padding: "8px 6px", border: txnFormData.category === c.id ? `2px solid ${c.color}` : `1px solid ${T.inputBorder}`, borderRadius: "8px", background: txnFormData.category === c.id ? `${c.color}10` : T.catBtnBg, color: txnFormData.category === c.id ? c.color : T.textMuted, fontSize: "11px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>{c.icon} {c.label}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: "10px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                          <label style={{ ...S.label, margin: 0 }}>Split across categories (optional)</label>
+                          <button onClick={() => setTxnFormData({ ...txnFormData, splits: [...(txnFormData.splits || []), { category: "other", amount: "" }] })} style={{ background: "none", border: "none", color: T.accent, fontSize: "11px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>+ Add split</button>
+                        </div>
+                        {(txnFormData.splits || []).map((s, i) => (
+                          <div key={i} style={{ display: "flex", gap: "6px", marginBottom: "4px" }}>
+                            <select value={s.category} onChange={e => setTxnFormData({ ...txnFormData, splits: txnFormData.splits.map((x, j) => j === i ? { ...x, category: e.target.value } : x) })} style={{ ...S.input, flex: 1, fontSize: "12px", padding: "6px 8px" }}>
+                              {CATEGORIES.filter(c => c.id !== "income").map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                            </select>
+                            <input type="number" value={s.amount} onChange={e => setTxnFormData({ ...txnFormData, splits: txnFormData.splits.map((x, j) => j === i ? { ...x, amount: e.target.value } : x) })} placeholder="0.00" style={{ ...S.input, width: "90px", fontSize: "12px", padding: "6px 8px" }} />
+                            <button onClick={() => setTxnFormData({ ...txnFormData, splits: txnFormData.splits.filter((_, j) => j !== i) })} style={{ background: "transparent", border: "none", color: T.textLight, fontSize: "18px", cursor: "pointer", padding: "0 6px" }}>×</button>
+                          </div>
+                        ))}
+                      </div>
+                    </>
                   )}
                   <div style={{ marginBottom: "14px" }}>
                     <label style={S.label}>Note (optional)</label>
@@ -1232,12 +1286,30 @@ export default function BudgetApp() {
                       </button>
                       {!collapsed && grouped[k].map(t => {
                         const c = catInfo(t.category);
+                        if (t.isTransfer) {
+                          return (
+                            <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "10px", marginBottom: "4px", boxShadow: T.cardShadow }}>
+                              <div onClick={() => startEditTxn(t)} style={{ cursor: "pointer", flex: 1, minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <span style={{ color: T.textMuted, fontSize: "12px" }}>⇄</span>
+                                  <p style={{ margin: 0, fontSize: "13px", fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.note || "Transfer"}</p>
+                                </div>
+                                <p style={{ margin: "2px 0 0 18px", fontSize: "10px", color: T.textLight }}>{t.date} · {acctName(t.fromAccountId)} → {acctName(t.toAccountId)}</p>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <span style={{ fontSize: "13px", ...S.mono, color: T.textMuted }}>{fmt(t.amount)}</span>
+                                <DelBtn id={t.id} onDel={id => { setTransactions(p => p.filter(x => x.id !== id)); setDeleteTxnConfirm(null); }} confirm={deleteTxnConfirm} setConfirm={setDeleteTxnConfirm} />
+                              </div>
+                            </div>
+                          );
+                        }
                         return (
                           <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "10px", marginBottom: "4px", boxShadow: T.cardShadow }}>
                             <div onClick={() => startEditTxn(t)} style={{ cursor: "pointer", flex: 1, minWidth: 0 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <span style={{ color: c.color, fontSize: "12px" }}>{c.icon}</span>
                                 <p style={{ margin: 0, fontSize: "13px", fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.note || c.label}</p>
+                                {t.splits?.length > 0 && <span style={{ fontSize: "10px", color: T.textLight, background: T.inputBg, padding: "1px 6px", borderRadius: "4px" }}>split</span>}
                               </div>
                               <p style={{ margin: "2px 0 0 18px", fontSize: "10px", color: T.textLight }}>{t.date} {t.accountId && `· ${acctName(t.accountId)}`}</p>
                             </div>
