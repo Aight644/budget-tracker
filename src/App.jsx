@@ -563,12 +563,29 @@ export default function BudgetApp() {
           );
         })()}
 
-        {activeTab === "dashboard" && (items.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "60px 20px", color: T.textLight }}>
-            <p style={{ fontSize: "40px", margin: "0 0 12px", opacity: 0.4 }}>◆</p>
-            <p style={{ fontSize: "16px", fontWeight: "600", color: T.textMuted, margin: "0 0 8px" }}>No items yet</p>
-            <p style={{ fontSize: "13px", margin: "0 0 20px" }}>Add income and expenses to start tracking</p>
-            <button onClick={() => { resetForm(); setShowForm(true); setActiveTab("items"); }} style={S.greenBtn}>+ Add First Item</button>
+        {activeTab === "dashboard" && (items.length === 0 && accounts.length === 0 && transactions.length === 0 ? (
+          <div style={{ padding: "20px 8px" }}>
+            <div style={{ textAlign: "center", marginBottom: "24px" }}>
+              <p style={{ fontSize: "36px", margin: "0 0 10px" }}>◆</p>
+              <h2 style={{ fontSize: "20px", fontWeight: "700", margin: "0 0 6px", color: T.text }}>Welcome to Budget Tracker</h2>
+              <p style={{ fontSize: "13px", color: T.textMuted, margin: 0 }}>Takes ~2 minutes to set up. Your data stays on this device.</p>
+            </div>
+            {[
+              { num: "1", title: "Pick your currency", desc: `Currently ${currency}. Change in Settings.`, action: () => setActiveTab("settings"), cta: "Open Settings" },
+              { num: "2", title: "Add your income", desc: "Your salary, side hustle, etc. — at least one income item.", action: () => { resetForm(); setFormData({ ...formData, isIncome: true, category: "income" }); setShowForm(true); setActiveTab("items"); }, cta: "+ Add income" },
+              { num: "3", title: "Add recurring expenses", desc: "Rent, subscriptions, bills. Or skip and import a bank CSV later.", action: () => { resetForm(); setShowForm(true); setActiveTab("items"); }, cta: "+ Add expense" },
+              { num: "4", title: "Track your accounts", desc: "Bank, savings, credit cards — unlocks net worth and safe-to-spend.", action: () => { resetAccountForm(); setShowAccountForm(true); setActiveTab("accounts"); }, cta: "+ Add account" },
+              { num: "5", title: "Import bank statements", desc: "Drop a CSV — auto-categorizes and detects your subscriptions.", action: () => { setActiveTab("transactions"); }, cta: "Open Activity" },
+            ].map((step) => (
+              <div key={step.num} style={{ display: "flex", gap: "14px", padding: "14px", background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "12px", marginBottom: "10px", boxShadow: T.cardShadow }}>
+                <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: T.accentBg, border: `1px solid ${T.accentBorder}`, display: "flex", alignItems: "center", justifyContent: "center", color: T.accent, fontSize: "14px", fontWeight: "700", flexShrink: 0 }}>{step.num}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: T.text }}>{step.title}</p>
+                  <p style={{ margin: "2px 0 8px", fontSize: "12px", color: T.textLight }}>{step.desc}</p>
+                  <button onClick={step.action} style={{ padding: "6px 12px", background: T.accentBg, border: `1px solid ${T.accentBorder}`, borderRadius: "8px", color: T.accent, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>{step.cta} →</button>
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <>
