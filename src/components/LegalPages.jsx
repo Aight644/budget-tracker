@@ -27,7 +27,7 @@ function PageShell({ title, lastUpdated, children, onBack }) {
         <div style={{ fontSize: 15, color: C.ink, lineHeight: 1.7 }}>{children}</div>
       </article>
       <div style={{ borderTop: `1px solid ${C.line}`, padding: "32px 24px", textAlign: "center", fontSize: 13, color: C.muted }}>
-        Budget · Local-first · Private by design
+        Zerod · Local-first · Private by design
       </div>
     </div>
   );
@@ -44,7 +44,8 @@ function P({ children }) {
 export function PrivacyPage({ onBack }) {
   return (
     <PageShell title="Privacy Policy" lastUpdated="April 2026" onBack={onBack}>
-      <P>Budget is a local-first personal finance app. This policy explains what data we collect, where it lives, and your control over it.</P>
+      <P>Zerod is a local-first personal finance app. This policy explains what data we collect, where it lives, and your control over it.</P>
+      <P>If you use the native iOS or Android app, this policy still applies; the ads section below is only relevant there.</P>
       <H2>What we collect</H2>
       <P>By default, <b>nothing leaves your device</b>. All your financial data — accounts, transactions, goals, budgets — is stored in your browser's local storage on the device where you enter it.</P>
       <P>If you <b>choose</b> to enable cloud sync by signing in with email and password, your data is encrypted in transit (HTTPS) and stored under your user account on Supabase. Each user can only read and write their own data (enforced by row-level security).</P>
@@ -68,7 +69,7 @@ export function PrivacyPage({ onBack }) {
 export function TermsPage({ onBack }) {
   return (
     <PageShell title="Terms of Service" lastUpdated="April 2026" onBack={onBack}>
-      <P>By using Budget ("the app") you agree to these terms. They're short because Budget is a tool, not a financial institution.</P>
+      <P>By using Zerod ("the app") you agree to these terms. They're short because Zerod is a tool, not a financial institution.</P>
       <H2>What Budget is</H2>
       <P>Budget is a personal finance tracker. It helps you categorise transactions, set goals, and understand your spending patterns. It is <b>not</b> a bank, not a financial advisor, and not regulated as either.</P>
       <H2>Not financial advice</H2>
@@ -90,9 +91,9 @@ export function TermsPage({ onBack }) {
 export function AboutPage({ onBack }) {
   return (
     <PageShell title="About" lastUpdated="April 2026" onBack={onBack}>
-      <P>Budget is an independently-built personal finance app with one opinion: your money data should belong to you, and your tool should be quiet about it.</P>
+      <P>Zerod is an independently-built personal finance app with one opinion: your money data should belong to you, and your tool should be quiet about it.</P>
       <H2>Why local-first</H2>
-      <P>Most budgeting apps want your bank credentials, phone number, and continuous cloud sync as a precondition. That's fine for some people; it's anxiety for others. Budget works completely on-device by default. Cloud sync is optional, paid features are optional, tracking is absent.</P>
+      <P>Most budgeting apps want your bank credentials, phone number, and continuous cloud sync as a precondition. That's fine for some people; it's anxiety for others. Zerod works completely on-device by default. Cloud sync is optional, paid features are optional, tracking is absent.</P>
       <H2>How we make money</H2>
       <P>We plan to offer a small Pro tier for extras like multi-device sync, household budgets, and advanced AI features. The free tier on mobile shows a single banner ad. The web version is free of ads. Your data is never sold, anonymised or otherwise.</P>
       <H2>Built with</H2>

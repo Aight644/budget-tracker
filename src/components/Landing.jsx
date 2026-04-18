@@ -171,7 +171,7 @@ export default function Landing({ onGetStarted, onSignIn }) {
         <div style={{ marginBottom: 48, maxWidth: 560 }}>
           <div style={{ fontFamily: FONT.ui, fontSize: 12, color: C.muted, textTransform: "uppercase", letterSpacing: 1.2, fontWeight: 600, marginBottom: 12 }}>What's inside</div>
           <div style={{ fontFamily: FONT.serif, fontSize: "clamp(32px, 4vw, 48px)", color: C.ink, letterSpacing: -1.2, lineHeight: 1.1, fontWeight: 400 }}>
-            Everything a budget<br />should be, nothing it shouldn't.
+            Everything Zerod<br />should be, nothing it <span style={{ fontStyle: "italic", color: C.muted }}>shouldn't.</span>
           </div>
         </div>
         <div className="landing-features" style={{
@@ -230,7 +230,7 @@ export default function Landing({ onGetStarted, onSignIn }) {
         fontFamily: FONT.ui, fontSize: 13, color: C.muted,
       }}>
         <div style={{ maxWidth: 1280, margin: "0 auto", display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
-          <div>Budget · Local-first · Private by design</div>
+          <div>Zerod · Local-first · Private by design</div>
           <div style={{ display: "flex", gap: 20 }}>
             <a href="/about" style={{ color: C.muted, textDecoration: "none" }}>About</a>
             <a href="/privacy" style={{ color: C.muted, textDecoration: "none" }}>Privacy</a>

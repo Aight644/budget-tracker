@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icon.svg"],
       manifest: {
-        name: "Budget — on-device money, held gently",
-        short_name: "Budget",
+        name: "Zerod — on-device money, held gently",
+        short_name: "Zerod",
         description: "A calm, local-first personal finance app. Your data stays on your device.",
         theme_color: "#1e40af",
         background_color: "#fafaf7",

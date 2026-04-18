@@ -2,14 +2,33 @@ import { FONT, makeTheme } from "../lib/theme.js";
 
 export function Logo({ size = 28, T }) {
   const t = T || makeTheme({});
+  const disc = size * 1.1;
+  const id = "zlg-" + Math.floor(Math.random() * 1e6);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden>
-        <rect x="1" y="1" width="26" height="26" rx="8" fill={t.primary} />
-        <path d="M8 20V8h3.2c3.6 0 5.4 2 5.4 5.9 0 3.9-1.8 6.1-5.4 6.1H8z" fill={t.accent} />
-        <circle cx="20" cy="9" r="2" fill={t.accent} />
+      <svg width={disc} height={disc} viewBox="0 0 64 64" style={{ flexShrink: 0 }} aria-hidden>
+        <defs>
+          <radialGradient id={id + "a"} cx="38%" cy="35%" r="75%">
+            <stop offset="0%" stopColor="#1fb56a" />
+            <stop offset="45%" stopColor="#0e6b4a" />
+            <stop offset="100%" stopColor="#063a2c" />
+          </radialGradient>
+          <radialGradient id={id + "b"} cx="25%" cy="90%" r="55%">
+            <stop offset="0%" stopColor="#2ea3e6" stopOpacity="0.85" />
+            <stop offset="60%" stopColor="#1f7f9e" stopOpacity="0.15" />
+            <stop offset="100%" stopColor="#063a2c" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <rect x="0" y="0" width="64" height="64" rx="14" fill={`url(#${id}a)`} />
+        <rect x="0" y="0" width="64" height="64" rx="14" fill={`url(#${id}b)`} />
+        <circle cx="42" cy="26" r="26" fill="#0b5238" opacity="0.45" />
+        <path d="M21 26h14c1.1 0 1.7 1.2 1.1 2.1L26 42h12v4H22c-1.1 0-1.7-1.2-1.1-2.1L31 30H21v-4z" fill="#fff" />
       </svg>
-      <span style={{ fontFamily: FONT.serif, fontSize: size * 0.82, color: t.ink, letterSpacing: -0.4, fontWeight: 500 }}>budget</span>
+      <span style={{
+        fontFamily: FONT.ui,
+        fontSize: size * 0.92, color: t.ink,
+        letterSpacing: -1, fontWeight: 600, lineHeight: 1,
+      }}>Zerod</span>
     </div>
   );
 }
