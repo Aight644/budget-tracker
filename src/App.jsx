@@ -4,7 +4,8 @@ import { loadStored, saveStored, clearStored } from "./lib/storage.js";
 import { toYr, convertBy, advanceDue, rollForwardDue, daysUntil } from "./lib/calc.js";
 import { makeFmt } from "./lib/format.js";
 import { parseCSV, detectColumns, rowsToTransactions } from "./lib/csv.js";
-import { detectSubscriptions } from "./lib/subscriptions.js";
+import { detectSubscriptions, guessCategoryFromDescription } from "./lib/subscriptions.js";
+import { BANK_PRESETS } from "./lib/bankPresets.js";
 import { computeCoach, generateInsights, scoreLabel } from "./lib/coach.js";
 import { askGemini, buildFinancialContext, getStoredKey, storeKey } from "./lib/ai.js";
 
@@ -197,7 +198,7 @@ export default function BudgetApp() {
       ...t,
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       accountId: csvState.accountId,
-      category: t.isIncome ? "income" : "other",
+      category: t.isIncome ? "income" : guessCategoryFromDescription(t.note),
     }));
     if (txns.length === 0) {
       setImportMsg({ type: "err", text: "No valid rows found — check column mapping" });
@@ -1041,7 +1042,13 @@ export default function BudgetApp() {
                       <h3 style={{ margin: 0, fontSize: "14px", fontWeight: "600" }}>Import CSV</h3>
                       <button onClick={() => setCsvState(null)} style={{ background: "none", border: "none", color: T.textLight, fontSize: "18px", cursor: "pointer" }}>×</button>
                     </div>
-                    <p style={{ margin: "0 0 12px", fontSize: "11px", color: T.textLight }}>File: {csvState.fileName} · {csvState.rows.length - 1} rows</p>
+                    <p style={{ margin: "0 0 10px", fontSize: "11px", color: T.textLight }}>File: {csvState.fileName} · {csvState.rows.length - 1} rows</p>
+                    <label style={S.label}>Bank preset</label>
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "12px" }}>
+                      {BANK_PRESETS.map((p) => (
+                        <button key={p.id} onClick={() => setCsvState({ ...csvState, map: { ...p.map } })} title={p.desc} style={{ padding: "6px 10px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "6px", color: T.textMuted, fontSize: "11px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>{p.name}</button>
+                      ))}
+                    </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
                       <div><label style={S.label}>Date column</label><select value={csvState.map.dateIdx} onChange={(e) => setMap("dateIdx", +e.target.value)} style={S.input}>{colOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
                       <div><label style={S.label}>Description</label><select value={csvState.map.descIdx} onChange={(e) => setMap("descIdx", +e.target.value)} style={S.input}>{colOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
@@ -1063,7 +1070,7 @@ export default function BudgetApp() {
                         {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                       </select>
                     </div>
-                    <p style={{ margin: "0 0 6px", fontSize: "11px", color: T.textLight, fontWeight: "600", textTransform: "uppercase" }}>Preview · {totalCount} parsed of {csvState.rows.length - 1} rows{totalCount < csvState.rows.length - 1 ? ` (${csvState.rows.length - 1 - totalCount} skipped — check date format)` : ""}</p>
+                    <p style={{ margin: "0 0 6px", fontSize: "11px", color: T.textLight, fontWeight: "600", textTransform: "uppercase" }}>Preview · {totalCount} parsed of {csvState.rows.length - (csvState.map.hasHeader ? 1 : 0)} rows{totalCount < csvState.rows.length - (csvState.map.hasHeader ? 1 : 0) ? ` (${csvState.rows.length - (csvState.map.hasHeader ? 1 : 0) - totalCount} skipped)` : ""}</p>
                     <div style={{ maxHeight: "200px", overflowY: "auto", border: `1px solid ${T.inputBorder}`, borderRadius: "8px", marginBottom: "12px" }}>
                       {preview.length === 0 ? (
                         <p style={{ padding: "10px", margin: 0, fontSize: "12px", color: T.danger }}>No rows parsed — try different columns or date format</p>

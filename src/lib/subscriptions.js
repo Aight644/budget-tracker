@@ -188,6 +188,17 @@ function guessCategory(merchant) {
   return "subscriptions";
 }
 
+export function guessCategoryFromDescription(desc) {
+  if (!desc) return "other";
+  const s = desc.toUpperCase();
+  const known = matchKnown(desc);
+  if (known) return known.category;
+  for (const [cat, words] of Object.entries(CATEGORY_HINTS)) {
+    if (words.some((w) => s.includes(w))) return cat;
+  }
+  return "other";
+}
+
 export function detectSubscriptions(transactions, { minOccurrences = 2, amountTolerance = 0.40 } = {}) {
   const expenses = transactions.filter((t) => !t.isIncome && t.date && (t.note || "").trim());
   const groups = {};
