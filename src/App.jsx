@@ -12,7 +12,7 @@ import { hashPin, getStoredPinHash, storePinHash } from "./lib/pin.js";
 import Onboarding from "./components/Onboarding.jsx";
 import Landing from "./components/Landing.jsx";
 import AuthPanel from "./components/AuthPanel.jsx";
-import SignInScreen from "./components/SignInScreen.jsx";
+import AuthScreen from "./components/AuthScreen.jsx";
 import { pullUserData, schedulePush, signOut, getCurrentUser, onAuthChange } from "./lib/sync.js";
 
 const HAS_ACCOUNT_KEY = "budget-app-has-account";
@@ -96,7 +96,8 @@ export default function BudgetApp() {
   const [pinDraft, setPinDraft] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
   const [onboarded, setOnboarded] = useState(true);
-  const [stage, setStage] = useState("app"); // landing | signup | app
+  const [stage, setStage] = useState("app"); // landing | auth | signup | app
+  const [authMode, setAuthMode] = useState("signup"); // signup | signin
   const [user, setUser] = useState(null);
   const [syncState, setSyncState] = useState("idle"); // idle | pulling | pushing | error
   const [syncError, setSyncError] = useState(null);
@@ -585,26 +586,50 @@ export default function BudgetApp() {
   };
   const fabVisible = ["dashboard", "items", "accounts", "transactions", "goals"].includes(activeTab) && !showForm && !showGoalForm && !showAccountForm && !showTxnForm && !csvState && !detectedSubs;
 
-  if (authChecked && hasAccount && !user && !skipSignIn) {
+  // Primary gate: if not signed in, show landing → auth screen flow.
+  if (authChecked && !user && !skipSignIn && !forceWelcome) {
+    if (stage === "auth") {
+      return (
+        <AuthScreen
+          initialMode={authMode}
+          onBack={() => setStage("landing")}
+          onSuccess={(u, { isNew }) => {
+            setUser(u);
+            if (typeof window !== "undefined" && window.history?.replaceState && forceLanding) {
+              try { window.history.replaceState({}, "", window.location.pathname); } catch {}
+            }
+            // If local state has no data AND this is a new account, go through onboarding.
+            const hasLocal = items.length > 0 || accounts.length > 0 || transactions.length > 0;
+            if (isNew && !hasLocal) {
+              setOnboarded(false);
+              setStage("signup");
+            } else {
+              setStage("app");
+            }
+            showToast(isNew ? "Welcome! Setting things up…" : "Welcome back — syncing...", "ok");
+          }}
+        />
+      );
+    }
+    // default: show landing
     return (
-      <SignInScreen
-        onSuccess={(u) => { setUser(u); showToast("Welcome back — syncing...", "ok"); }}
-        onSkip={() => { try { sessionStorage.setItem(SKIP_SIGNIN_KEY, "1"); } catch {}; setSkipSignIn(true); }}
+      <Landing
+        onGetStarted={() => { setAuthMode("signup"); setStage("auth"); }}
+        onSignIn={() => { setAuthMode("signin"); setStage("auth"); }}
       />
     );
   }
 
-  if (forceLanding || (loaded && !onboarded && stage === "landing")) {
-    return <Landing onGetStarted={() => {
-      try { localStorage.setItem("budget-app-landing-seen", "1"); } catch {}
-      setStage("signup");
-      if (typeof window !== "undefined" && window.history?.replaceState && forceLanding) {
-        try { window.history.replaceState({}, "", window.location.pathname); } catch {}
-      }
-    }} />;
+  if (forceLanding) {
+    return (
+      <Landing
+        onGetStarted={() => { setAuthMode("signup"); setStage("auth"); }}
+        onSignIn={() => { setAuthMode("signin"); setStage("auth"); }}
+      />
+    );
   }
 
-  if ((loaded && !onboarded) || forceWelcome) {
+  if ((loaded && !onboarded && (user || skipSignIn)) || forceWelcome) {
     const GOAL_TEMPLATES = {
       emergency: { name: "Emergency fund", target: 5000, saved: 0, monthlySaving: 200, deadline: "", color: "#2563eb" },
       debt: { name: "Pay off debt", target: 5000, saved: 0, monthlySaving: 200, deadline: "", color: "#dc2626" },

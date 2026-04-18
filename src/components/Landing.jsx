@@ -66,7 +66,7 @@ function HeroVisual() {
   );
 }
 
-export default function Landing({ onGetStarted }) {
+export default function Landing({ onGetStarted, onSignIn }) {
   const features = [
     { t: "Calm, not alarmist", d: "See what's safe to spend today — no red numbers, no guilt trips.", ic: "◐" },
     { t: "On-device only", d: "No cloud, no accounts on our servers. Your CSV, your PIN, your device.", ic: "◆" },
@@ -97,7 +97,7 @@ export default function Landing({ onGetStarted }) {
             ))}
           </nav>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button onClick={onGetStarted} className="landing-signin" style={{ background: "transparent", border: "none", fontFamily: FONT.ui, fontSize: 14, color: C.ink, cursor: "pointer", fontWeight: 500 }}>Sign in</button>
+            <button onClick={onSignIn || onGetStarted} className="landing-signin" style={{ background: "transparent", border: "none", fontFamily: FONT.ui, fontSize: 14, color: C.ink, cursor: "pointer", fontWeight: 500 }}>Sign in</button>
             <button onClick={onGetStarted} style={{
               background: C.primary, color: "#fff", border: "none",
               padding: "10px 18px", borderRadius: 10,

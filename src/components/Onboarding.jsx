@@ -687,7 +687,7 @@ export default function Onboarding({ initialCurrency, onComplete }) {
     });
   };
 
-  const TOTAL = 7;
+  const TOTAL = 6;
   const next = () => setStep((s) => Math.min(s + 1, TOTAL));
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
@@ -696,7 +696,6 @@ export default function Onboarding({ initialCurrency, onComplete }) {
   if (step === 2) return <Goals state={state} setState={setState} onNext={next} onBack={back} onSkip={next} />;
   if (step === 3) return <Connect onBack={back} onNext={(choice) => { setState({ ...state, choice }); setStep(4); }} onSkip={() => setStep(4)} />;
   if (step === 4) return <Budget state={state} setState={setState} onNext={next} onBack={back} onSkip={next} />;
-  if (step === 5) return <PinStep onNext={next} onBack={back} onSkip={next} />;
-  if (step === 6) return <CoachStep onNext={next} onBack={back} onSkip={next} />;
+  if (step === 5) return <CoachStep onNext={next} onBack={back} onSkip={next} />;
   return <Done state={state} onFinish={() => finish({ action: state.choice })} />;
 }
