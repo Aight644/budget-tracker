@@ -9,6 +9,7 @@ import { BANK_PRESETS } from "./lib/bankPresets.js";
 import { computeCoach, generateInsights, scoreLabel } from "./lib/coach.js";
 import { askGemini, buildFinancialContext, getStoredKey, storeKey } from "./lib/ai.js";
 import { hashPin, getStoredPinHash, storePinHash } from "./lib/pin.js";
+import Onboarding from "./components/Onboarding.jsx";
 
 export default function BudgetApp() {
   const [items, setItems] = useState([]);
@@ -87,6 +88,7 @@ export default function BudgetApp() {
   const [pinError, setPinError] = useState("");
   const [pinDraft, setPinDraft] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
+  const [onboarded, setOnboarded] = useState(true);
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const fmt = useMemo(() => makeFmt(currency), [currency]);
 
@@ -108,6 +110,10 @@ export default function BudgetApp() {
       if (d.darkModeAuto !== undefined) setDarkModeAuto(d.darkModeAuto);
       if (d.darkMode !== undefined && d.darkModeAuto === false) setDarkMode(d.darkMode);
       if (d.currency && CURRENCIES.some((c) => c.code === d.currency)) setCurrency(d.currency);
+      if (d.onboarded !== undefined) setOnboarded(d.onboarded);
+      else if ((d.items?.length || 0) === 0 && (d.accounts?.length || 0) === 0 && (d.transactions?.length || 0) === 0) setOnboarded(false);
+    } else {
+      setOnboarded(false);
     }
     setLoaded(true);
   }, []);
@@ -143,9 +149,9 @@ export default function BudgetApp() {
 
   useEffect(() => {
     if (!loaded) return;
-    const r = saveStored({ items, goals, accounts, transactions, categoryBudgets, netWorthHistory, view, darkMode, darkModeAuto, currency });
+    const r = saveStored({ items, goals, accounts, transactions, categoryBudgets, netWorthHistory, view, darkMode, darkModeAuto, currency, onboarded });
     setSaveError(r.ok ? null : r.error);
-  }, [items, goals, accounts, transactions, categoryBudgets, netWorthHistory, view, darkMode, darkModeAuto, currency, loaded]);
+  }, [items, goals, accounts, transactions, categoryBudgets, netWorthHistory, view, darkMode, darkModeAuto, currency, onboarded, loaded]);
 
   const handleExport = () => {
     const payload = { version: SCHEMA_VERSION, exportedAt: new Date().toISOString(), items, goals, accounts, transactions, categoryBudgets, view, darkMode, currency };
@@ -503,6 +509,34 @@ export default function BudgetApp() {
     else { resetForm(); setShowForm(true); setActiveTab("items"); }
   };
   const fabVisible = ["dashboard", "items", "accounts", "transactions", "goals"].includes(activeTab) && !showForm && !showGoalForm && !showAccountForm && !showTxnForm && !csvState && !detectedSubs;
+
+  if (loaded && !onboarded) {
+    const GOAL_TEMPLATES = {
+      emergency: { name: "Emergency fund", target: 5000, saved: 0, monthlySaving: 200, deadline: "", color: "#2563eb" },
+      debt: { name: "Pay off debt", target: 5000, saved: 0, monthlySaving: 200, deadline: "", color: "#dc2626" },
+      save: { name: "Savings goal", target: 10000, saved: 0, monthlySaving: 300, deadline: "", color: "#16a34a" },
+    };
+    return (
+      <Onboarding
+        initialCurrency={currency}
+        onComplete={(data) => {
+          if (data.currency) setCurrency(data.currency);
+          if (Array.isArray(data.goals) && data.goals.length > 0) {
+            const templates = data.goals.map((id) => GOAL_TEMPLATES[id]).filter(Boolean);
+            if (templates.length > 0) {
+              const newGoals = templates.map((t, i) => ({ ...t, id: `${Date.now()}-${i}` }));
+              setGoals((p) => [...p, ...newGoals]);
+            }
+          }
+          setOnboarded(true);
+          if (data.action === "csv") {
+            setActiveTab("transactions");
+          }
+          showToast("Welcome — you're set up.", "ok");
+        }}
+      />
+    );
+  }
 
   if (pinHash && !unlocked) {
     return (
@@ -950,6 +984,10 @@ export default function BudgetApp() {
                   {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
                 </select>
               </div>
+              <div style={{ marginBottom: "14px" }}>
+                <button onClick={() => { setOnboarded(false); setActiveTab("dashboard"); }} style={{ width: "100%", padding: "10px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "8px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Replay welcome flow</button>
+              </div>
+
               <div style={{ marginBottom: "14px" }}>
                 <label style={S.label}>PIN Lock (optional)</label>
                 {pinHash ? (
