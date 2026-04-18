@@ -12,7 +12,11 @@ import { hashPin, getStoredPinHash, storePinHash } from "./lib/pin.js";
 import Onboarding from "./components/Onboarding.jsx";
 import Landing from "./components/Landing.jsx";
 import AuthPanel from "./components/AuthPanel.jsx";
+import SignInScreen from "./components/SignInScreen.jsx";
 import { pullUserData, schedulePush, signOut, getCurrentUser, onAuthChange } from "./lib/sync.js";
+
+const HAS_ACCOUNT_KEY = "budget-app-has-account";
+const SKIP_SIGNIN_KEY = "budget-app-skip-signin";
 
 export default function BudgetApp() {
   const [items, setItems] = useState([]);
@@ -96,6 +100,9 @@ export default function BudgetApp() {
   const [user, setUser] = useState(null);
   const [syncState, setSyncState] = useState("idle"); // idle | pulling | pushing | error
   const [syncError, setSyncError] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [hasAccount, setHasAccount] = useState(() => { try { return localStorage.getItem(HAS_ACCOUNT_KEY) === "1"; } catch { return false; } });
+  const [skipSignIn, setSkipSignIn] = useState(() => { try { return sessionStorage.getItem(SKIP_SIGNIN_KEY) === "1"; } catch { return false; } });
   const forceWelcome = typeof window !== "undefined" && /[?&](welcome|signup)\b/i.test(window.location.search);
   const forceLanding = typeof window !== "undefined" && /[?&]landing\b/i.test(window.location.search);
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
@@ -156,27 +163,14 @@ export default function BudgetApp() {
     });
   }, [loaded, accounts]);
 
-  useEffect(() => {
-    if (!pinHash) return;
-    const onVisibility = () => { if (document.hidden) setUnlocked(false); };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [pinHash]);
+  // PIN auto-lock disabled; cloud auth is now the primary session gate.
 
   useEffect(() => {
-    if (!pinHash || !unlocked) return;
-    const IDLE_MS = 10 * 60 * 1000;
-    let timer;
-    const reset = () => { clearTimeout(timer); timer = setTimeout(() => setUnlocked(false), IDLE_MS); };
-    const events = ["mousedown", "keydown", "touchstart", "scroll"];
-    events.forEach((e) => document.addEventListener(e, reset, { passive: true }));
-    reset();
-    return () => { clearTimeout(timer); events.forEach((e) => document.removeEventListener(e, reset)); };
-  }, [pinHash, unlocked]);
-
-  useEffect(() => {
-    getCurrentUser().then((u) => setUser(u));
-    const unsub = onAuthChange((u) => setUser(u));
+    getCurrentUser().then((u) => { setUser(u); setAuthChecked(true); if (u) { try { localStorage.setItem(HAS_ACCOUNT_KEY, "1"); } catch {} setHasAccount(true); } });
+    const unsub = onAuthChange((u) => {
+      setUser(u);
+      if (u) { try { localStorage.setItem(HAS_ACCOUNT_KEY, "1"); } catch {} setHasAccount(true); }
+    });
     return unsub;
   }, []);
 
@@ -591,18 +585,12 @@ export default function BudgetApp() {
   };
   const fabVisible = ["dashboard", "items", "accounts", "transactions", "goals"].includes(activeTab) && !showForm && !showGoalForm && !showAccountForm && !showTxnForm && !csvState && !detectedSubs;
 
-  if (pinHash && !unlocked) {
+  if (authChecked && hasAccount && !user && !skipSignIn) {
     return (
-      <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "'IBM Plex Sans', system-ui, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-        <div style={{ textAlign: "center", maxWidth: "360px", width: "100%" }}>
-          <p style={{ fontSize: "40px", margin: "0 0 10px", opacity: 0.5 }}>🔒</p>
-          <h2 style={{ fontSize: "18px", fontWeight: "600", margin: "0 0 6px" }}>Budget Tracker</h2>
-          <p style={{ fontSize: "13px", color: T.textMuted, margin: "0 0 24px" }}>Enter your PIN to unlock</p>
-          <input type="password" inputMode="numeric" pattern="[0-9]*" value={pinInput} onChange={(e) => { setPinInput(e.target.value.replace(/\D/g, "").slice(0, 8)); setPinError(""); }} onKeyDown={(e) => { if (e.key === "Enter") tryUnlock(); }} placeholder="••••" autoFocus style={{ ...S.input, textAlign: "center", fontSize: "24px", letterSpacing: "8px", padding: "16px", marginBottom: "10px" }} />
-          {pinError && <p style={{ margin: "0 0 10px", fontSize: "12px", color: T.danger }}>{pinError}</p>}
-          <button onClick={tryUnlock} style={{ ...S.greenBtn, width: "100%" }}>Unlock</button>
-        </div>
-      </div>
+      <SignInScreen
+        onSuccess={(u) => { setUser(u); showToast("Welcome back — syncing...", "ok"); }}
+        onSkip={() => { try { sessionStorage.setItem(SKIP_SIGNIN_KEY, "1"); } catch {}; setSkipSignIn(true); }}
+      />
     );
   }
 
@@ -1178,7 +1166,7 @@ export default function BudgetApp() {
                         </p>
                       </div>
                     </div>
-                    <button onClick={async () => { try { await signOut(); setUser(null); showToast("Signed out", "ok"); } catch (e) { showToast(e.message, "err"); } }} style={{ width: "100%", padding: "8px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "8px", color: T.textMuted, fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>Sign out</button>
+                    <button onClick={async () => { try { await signOut(); setUser(null); try { localStorage.removeItem(HAS_ACCOUNT_KEY); sessionStorage.removeItem(SKIP_SIGNIN_KEY); } catch {} setHasAccount(false); setSkipSignIn(false); showToast("Signed out", "ok"); } catch (e) { showToast(e.message, "err"); } }} style={{ width: "100%", padding: "8px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "8px", color: T.textMuted, fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>Sign out</button>
                   </div>
                 ) : (
                   <div style={{ padding: "12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px" }}>
