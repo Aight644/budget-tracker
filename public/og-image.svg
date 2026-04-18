@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <defs>
+    <radialGradient id="glow" cx="80%" cy="20%" r="60%">
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0.95"/>
+      <stop offset="65%" stop-color="#10b981" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#1e40af"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <g transform="translate(80 80)">
+    <rect width="52" height="52" rx="14" fill="#ffffff"/>
+    <path d="M16 40V16h6.4c7.2 0 10.8 4 10.8 11.8 0 7.8-3.6 12.2-10.8 12.2H16z" fill="#10b981"/>
+    <circle cx="40" cy="18" r="4" fill="#10b981"/>
+  </g>
+  <text x="152" y="122" font-family="'IBM Plex Serif', Georgia, serif" font-size="40" font-weight="500" fill="#ffffff" letter-spacing="-1">budget</text>
+
+  <g transform="translate(80 260)">
+    <text font-family="'IBM Plex Sans', sans-serif" font-size="16" fill="#ffffff" opacity="0.8" letter-spacing="3" text-transform="uppercase">LEFTOVER · THIS FORTNIGHT</text>
+    <text y="120" font-family="'IBM Plex Serif', Georgia, serif" font-size="180" font-weight="400" fill="#ffffff" letter-spacing="-8">
+      $312<tspan fill="rgba(255,255,255,0.5)" font-size="88">.40</tspan>
+    </text>
+    <text y="180" font-family="'IBM Plex Sans', sans-serif" font-size="26" fill="#ffffff" opacity="0.85">Money, held <tspan font-family="'IBM Plex Serif', Georgia, serif" font-style="italic" fill="#10b981">gently.</tspan></text>
+  </g>
+
+  <g transform="translate(80 520)">
+    <text font-family="'IBM Plex Sans', sans-serif" font-size="20" fill="#ffffff" opacity="0.75">A calm, local-first personal finance app — your data stays on your device.</text>
+  </g>
+</svg>

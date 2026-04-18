@@ -13,6 +13,7 @@ import Onboarding from "./components/Onboarding.jsx";
 import Landing from "./components/Landing.jsx";
 import AuthPanel from "./components/AuthPanel.jsx";
 import AuthScreen from "./components/AuthScreen.jsx";
+import { PrivacyPage, TermsPage, AboutPage } from "./components/LegalPages.jsx";
 import { pullUserData, schedulePush, signOut, getCurrentUser, onAuthChange } from "./lib/sync.js";
 import DashboardView from "./components/DashboardView.jsx";
 import { Sidebar, MobileTopBar, MobileTabBar } from "./components/AppShell.jsx";
@@ -110,6 +111,20 @@ export default function BudgetApp() {
   const [skipSignIn, setSkipSignIn] = useState(() => { try { return sessionStorage.getItem(SKIP_SIGNIN_KEY) === "1"; } catch { return false; } });
   const forceWelcome = typeof window !== "undefined" && /[?&](welcome|signup)\b/i.test(window.location.search);
   const forceLanding = typeof window !== "undefined" && /[?&]landing\b/i.test(window.location.search);
+  const [legalPage, setLegalPage] = useState(() => {
+    if (typeof window === "undefined") return null;
+    const p = window.location.pathname;
+    if (p === "/privacy") return "privacy";
+    if (p === "/terms") return "terms";
+    if (p === "/about") return "about";
+    return null;
+  });
+  const closeLegal = () => {
+    setLegalPage(null);
+    if (typeof window !== "undefined" && window.history?.replaceState) {
+      try { window.history.replaceState({}, "", "/"); } catch {}
+    }
+  };
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const fmt = useMemo(() => makeFmt(currency), [currency]);
 
@@ -589,6 +604,11 @@ export default function BudgetApp() {
     else { resetForm(); setShowForm(true); setActiveTab("items"); }
   };
   const fabVisible = ["dashboard", "items", "accounts", "transactions", "goals"].includes(activeTab) && !showForm && !showGoalForm && !showAccountForm && !showTxnForm && !csvState && !detectedSubs;
+
+  // Legal pages are always accessible via URL
+  if (legalPage === "privacy") return <PrivacyPage onBack={closeLegal} />;
+  if (legalPage === "terms") return <TermsPage onBack={closeLegal} />;
+  if (legalPage === "about") return <AboutPage onBack={closeLegal} />;
 
   // Primary gate: if not signed in, show landing → auth screen flow.
   if (authChecked && !user && !skipSignIn && !forceWelcome) {

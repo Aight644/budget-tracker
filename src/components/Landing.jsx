@@ -226,10 +226,18 @@ export default function Landing({ onGetStarted, onSignIn }) {
       {/* Footer */}
       <footer style={{
         borderTop: `1px solid ${C.line}`,
-        padding: "40px 24px", textAlign: "center",
+        padding: "40px 24px",
         fontFamily: FONT.ui, fontSize: 13, color: C.muted,
       }}>
-        Budget · Local-first · Private by design
+        <div style={{ maxWidth: 1280, margin: "0 auto", display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+          <div>Budget · Local-first · Private by design</div>
+          <div style={{ display: "flex", gap: 20 }}>
+            <a href="/about" style={{ color: C.muted, textDecoration: "none" }}>About</a>
+            <a href="/privacy" style={{ color: C.muted, textDecoration: "none" }}>Privacy</a>
+            <a href="/terms" style={{ color: C.muted, textDecoration: "none" }}>Terms</a>
+            <a href="https://github.com/Aight644/budget-tracker" target="_blank" rel="noopener noreferrer" style={{ color: C.muted, textDecoration: "none" }}>GitHub</a>
+          </div>
+        </div>
       </footer>
     </div>
   );
