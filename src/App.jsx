@@ -110,7 +110,11 @@ export default function BudgetApp() {
       if (d.darkModeAuto !== undefined) setDarkModeAuto(d.darkModeAuto);
       if (d.darkMode !== undefined && d.darkModeAuto === false) setDarkMode(d.darkMode);
       if (d.currency && CURRENCIES.some((c) => c.code === d.currency)) setCurrency(d.currency);
-      if (d.onboarded !== undefined) setOnboarded(d.onboarded);
+      const SEEN_KEY = "budget-app-welcome-v1";
+      const hasSeen = (() => { try { return localStorage.getItem(SEEN_KEY) === "1"; } catch { return false; } })();
+      if (!hasSeen) {
+        setOnboarded(false);
+      } else if (d.onboarded !== undefined) setOnboarded(d.onboarded);
       else if ((d.items?.length || 0) === 0 && (d.accounts?.length || 0) === 0 && (d.transactions?.length || 0) === 0) setOnboarded(false);
     } else {
       setOnboarded(false);
@@ -510,6 +514,21 @@ export default function BudgetApp() {
   };
   const fabVisible = ["dashboard", "items", "accounts", "transactions", "goals"].includes(activeTab) && !showForm && !showGoalForm && !showAccountForm && !showTxnForm && !csvState && !detectedSubs;
 
+  if (pinHash && !unlocked) {
+    return (
+      <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "'DM Sans', 'Segoe UI', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+        <div style={{ textAlign: "center", maxWidth: "360px", width: "100%" }}>
+          <p style={{ fontSize: "40px", margin: "0 0 10px", opacity: 0.5 }}>🔒</p>
+          <h2 style={{ fontSize: "18px", fontWeight: "600", margin: "0 0 6px" }}>Budget Tracker</h2>
+          <p style={{ fontSize: "13px", color: T.textMuted, margin: "0 0 24px" }}>Enter your PIN to unlock</p>
+          <input type="password" inputMode="numeric" pattern="[0-9]*" value={pinInput} onChange={(e) => { setPinInput(e.target.value.replace(/\D/g, "").slice(0, 8)); setPinError(""); }} onKeyDown={(e) => { if (e.key === "Enter") tryUnlock(); }} placeholder="••••" autoFocus style={{ ...S.input, textAlign: "center", fontSize: "24px", letterSpacing: "8px", padding: "16px", marginBottom: "10px" }} />
+          {pinError && <p style={{ margin: "0 0 10px", fontSize: "12px", color: T.danger }}>{pinError}</p>}
+          <button onClick={tryUnlock} style={{ ...S.greenBtn, width: "100%" }}>Unlock</button>
+        </div>
+      </div>
+    );
+  }
+
   if (loaded && !onboarded) {
     const GOAL_TEMPLATES = {
       emergency: { name: "Emergency fund", target: 5000, saved: 0, monthlySaving: 200, deadline: "", color: "#2563eb" },
@@ -529,28 +548,13 @@ export default function BudgetApp() {
             }
           }
           setOnboarded(true);
+          try { localStorage.setItem("budget-app-welcome-v1", "1"); } catch {}
           if (data.action === "csv") {
             setActiveTab("transactions");
           }
           showToast("Welcome — you're set up.", "ok");
         }}
       />
-    );
-  }
-
-  if (pinHash && !unlocked) {
-    return (
-      <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "'DM Sans', 'Segoe UI', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
-        <div style={{ textAlign: "center", maxWidth: "360px", width: "100%" }}>
-          <p style={{ fontSize: "40px", margin: "0 0 10px", opacity: 0.5 }}>🔒</p>
-          <h2 style={{ fontSize: "18px", fontWeight: "600", margin: "0 0 6px" }}>Budget Tracker</h2>
-          <p style={{ fontSize: "13px", color: T.textMuted, margin: "0 0 24px" }}>Enter your PIN to unlock</p>
-          <input type="password" inputMode="numeric" pattern="[0-9]*" value={pinInput} onChange={(e) => { setPinInput(e.target.value.replace(/\D/g, "").slice(0, 8)); setPinError(""); }} onKeyDown={(e) => { if (e.key === "Enter") tryUnlock(); }} placeholder="••••" autoFocus style={{ ...S.input, textAlign: "center", fontSize: "24px", letterSpacing: "8px", padding: "16px", marginBottom: "10px" }} />
-          {pinError && <p style={{ margin: "0 0 10px", fontSize: "12px", color: T.danger }}>{pinError}</p>}
-          <button onClick={tryUnlock} style={{ ...S.greenBtn, width: "100%" }}>Unlock</button>
-        </div>
-      </div>
     );
   }
 
