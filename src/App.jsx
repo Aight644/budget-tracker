@@ -14,6 +14,10 @@ import Landing from "./components/Landing.jsx";
 import AuthPanel from "./components/AuthPanel.jsx";
 import AuthScreen from "./components/AuthScreen.jsx";
 import { pullUserData, schedulePush, signOut, getCurrentUser, onAuthChange } from "./lib/sync.js";
+import DashboardView from "./components/DashboardView.jsx";
+import { Sidebar, MobileTopBar, MobileTabBar } from "./components/AppShell.jsx";
+import { makeTheme, FONT as DESIGN_FONT } from "./lib/theme.js";
+import { toFn } from "./lib/calc.js";
 
 const HAS_ACCOUNT_KEY = "budget-app-has-account";
 const SKIP_SIGNIN_KEY = "budget-app-skip-signin";
@@ -684,49 +688,27 @@ export default function BudgetApp() {
         <button className="fab mobile-only" onClick={fabAction} title="Quick add" style={{ position: "fixed", bottom: "24px", right: "24px", zIndex: 900, width: "56px", height: "56px", borderRadius: "50%", background: T.primary, color: "#fff", border: "none", fontSize: "28px", fontWeight: "300", cursor: "pointer", boxShadow: "0 8px 24px rgba(30,64,175,0.35)", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>+</button>
       )}
 
-      <div className="app-shell">
-      <aside className="app-sidebar" style={{ background: T.card, borderRight: `1px solid ${T.cardBorder}`, padding: "28px 20px", display: "none", flexDirection: "column" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
-          <svg width="26" height="26" viewBox="0 0 28 28">
-            <rect x="1" y="1" width="26" height="26" rx="8" fill={T.primary}/>
-            <path d="M8 20V8h3.2c3.6 0 5.4 2 5.4 5.9 0 3.9-1.8 6.1-5.4 6.1H8z" fill={T.highlight}/>
-            <circle cx="20" cy="9" r="2" fill={T.highlight}/>
-          </svg>
-          <span style={{ fontFamily: "'IBM Plex Serif', Georgia, serif", fontSize: 22, color: T.text, letterSpacing: -0.3, fontWeight: 500 }}>budget</span>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {[
-            { id: "dashboard", label: "Home", ic: "◉" },
-            { id: "items", label: "Budget", ic: "◐" },
-            { id: "accounts", label: "Accounts", ic: "▤" },
-            { id: "transactions", label: "Transactions", ic: "≡" },
-            { id: "goals", label: "Goals", ic: "◇" },
-            { id: "coach", label: "Coach", ic: "✦" },
-            { id: "settings", label: "Settings", ic: "⚙" },
-          ].map((n) => {
-            const on = activeTab === n.id;
-            return (
-              <button key={n.id} onClick={() => setActiveTab(n.id)} style={{
-                padding: "10px 12px", borderRadius: 9,
-                background: on ? T.primarySoft : "transparent",
-                color: on ? T.primary : T.textMuted,
-                display: "flex", alignItems: "center", gap: 10,
-                fontFamily: "inherit", fontSize: 14, fontWeight: on ? 600 : 500,
-                border: "none", cursor: "pointer", textAlign: "left", width: "100%",
-              }}>
-                <span style={{ fontSize: 15, width: 18 }}>{n.ic}</span>{n.label}
-              </button>
-            );
-          })}
-        </div>
-        <button onClick={fabAction} style={{ marginTop: 20, padding: "10px 14px", borderRadius: 10, background: T.primary, color: "#fff", border: "none", fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Quick add</button>
-        <div style={{ marginTop: "auto", paddingTop: 16, display: "flex", gap: 6 }}>
-          <button onClick={() => { setDarkModeAuto(false); setDarkMode(!darkMode); }} title={darkMode ? "Light mode" : "Dark mode"} style={{ flex: 1, padding: "8px", background: T.toggleBg, border: `1px solid ${T.inputBorder}`, color: T.textMuted, borderRadius: 8, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>{darkMode ? "☀" : "☾"}</button>
-          <button onClick={() => setActiveTab("settings")} title="Settings" style={{ flex: 1, padding: "8px", background: T.toggleBg, border: `1px solid ${T.inputBorder}`, color: T.textMuted, borderRadius: 8, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>⚙</button>
-        </div>
-      </aside>
-
-      <div className="app-main">
+      {(() => {
+        const designT = makeTheme({ dark: !!darkMode });
+        const fnInc = items.filter(i => i.isIncome && !i.cancelled).reduce((s, i) => s + toFn(i.amount, i.frequency), 0);
+        const fnExp = items.filter(i => !i.isIncome && !i.cancelled).reduce((s, i) => s + toFn(i.amount, i.frequency), 0);
+        const fnLeft = fnInc - fnExp;
+        return (
+          <>
+            <MobileTopBar user={user} activeTab={activeTab} T={designT} />
+            <div className="app-shell">
+              <div className="app-grid" style={{ display: "grid", gridTemplateColumns: "240px minmax(0, 1fr)", maxWidth: 1440, margin: "0 auto" }}>
+                <Sidebar
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  user={user}
+                  onOpenSettings={() => setActiveTab("settings")}
+                  T={designT}
+                  heroValue={fmt(fnLeft)}
+                  heroLabel="This fortnight"
+                  heroSubtext={fnLeft >= 0 ? "↑ on track" : "⚠ over"}
+                />
+                <div className="app-main">
 
       {/* HEADER */}
       <div className="app-top-header" style={{ padding: "24px 20px 16px", borderBottom: `1px solid ${T.tabBorder}`, background: T.headerBg }}>
@@ -764,8 +746,18 @@ export default function BudgetApp() {
 
       <div style={{ padding: "16px 20px 120px" }}>
 
-        {/* DASHBOARD */}
-        {activeTab === "dashboard" && accounts.length > 0 && (() => {
+        {/* DASHBOARD — new design-language view */}
+        {activeTab === "dashboard" && (
+          <DashboardView
+            T={makeTheme({ dark: !!darkMode })}
+            fmt={fmt}
+            user={user}
+            state={{ items, accounts, transactions, goals, categoryBudgets }}
+            actions={{ setActiveTab }}
+          />
+        )}
+
+        {false && activeTab === "dashboard" && accounts.length > 0 && (() => {
           const liquidTypes = ["checking", "savings", "cash"];
           const liquid = accounts.filter(a => liquidTypes.includes(a.type)).reduce((s, a) => s + (a.balance || 0), 0);
           const windowDays = view === "fortnightly" ? 14 : view === "monthly" ? 30 : 365;
@@ -837,7 +829,7 @@ export default function BudgetApp() {
           );
         })()}
 
-        {activeTab === "dashboard" && (items.length === 0 && accounts.length === 0 && transactions.length === 0 ? (
+        {false && activeTab === "dashboard" && (items.length === 0 && accounts.length === 0 && transactions.length === 0 ? (
           <div style={{ padding: "20px 8px" }}>
             <div style={{ textAlign: "center", marginBottom: "24px" }}>
               <p style={{ fontSize: "36px", margin: "0 0 10px" }}>◆</p>
@@ -2060,8 +2052,13 @@ export default function BudgetApp() {
           );
         })()}
       </div>
-      </div>
-      </div>
+                </div>
+              </div>
+            </div>
+            <MobileTabBar activeTab={activeTab} setActiveTab={setActiveTab} T={designT} />
+          </>
+        );
+      })()}
     </div>
   );
 }
