@@ -46,3 +46,11 @@ input:focus, select:focus, textarea:focus {
 
 /* Reduce tap delay on mobile */
 * { -webkit-tap-highlight-color: transparent; }
+
+/* Dashboard hero grid responsive */
+@media (max-width: 720px) {
+  .dash-hero-grid { grid-template-columns: 1fr !important; }
+}
+@media (min-width: 721px) and (max-width: 1100px) {
+  .dash-hero-grid { grid-template-columns: 1fr 1fr !important; }
+}

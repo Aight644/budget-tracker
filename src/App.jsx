@@ -462,64 +462,66 @@ export default function BudgetApp() {
   const barMax = Math.max(...categoryTotals.map(c => c.total), 1);
 
   const T = darkMode ? {
-    bg: "#071A36",
-    headerBg: "#0B2545",
-    card: "rgba(255,255,255,0.04)",
-    cardBorder: "rgba(255,255,255,0.08)",
+    bg: "#0b1020",
+    headerBg: "#121833",
+    card: "#121833",
+    cardBorder: "#1f2747",
     cardShadow: "none",
-    text: "#E8EEF7",
-    textMuted: "#9AA7BB",
-    textLight: "#64748B",
+    text: "#f1f5f9",
+    textMuted: "#94a3b8",
+    textLight: "#64748b",
     inputBg: "rgba(255,255,255,0.04)",
-    inputBorder: "rgba(255,255,255,0.12)",
-    accent: "#F07A2E",
-    accentBg: "rgba(240,122,46,0.12)",
-    accentBorder: "rgba(240,122,46,0.3)",
+    inputBorder: "#1f2747",
+    accent: "#10b981",
+    accentBg: "rgba(16,185,129,0.14)",
+    accentBorder: "rgba(16,185,129,0.3)",
     dangerBg: "rgba(220,38,38,0.10)",
     dangerBorder: "rgba(220,38,38,0.22)",
-    danger: "#F87171",
-    tabBorder: "rgba(255,255,255,0.08)",
+    danger: "#f87171",
+    tabBorder: "#1f2747",
     toggleBg: "rgba(255,255,255,0.05)",
     toggleActive: "rgba(255,255,255,0.12)",
     toggleActiveText: "#fff",
     toggleShadow: "none",
     catBtnBg: "rgba(255,255,255,0.04)",
-    primary: "#F07A2E",
-    highlight: "#F07A2E",
-    highlightBg: "rgba(240,122,46,0.14)",
+    primary: "#1e40af",
+    primarySoft: "#1a2347",
+    highlight: "#10b981",
+    highlightBg: "rgba(16,185,129,0.14)",
   } : {
-    bg: "#FAF7F2",
-    headerBg: "#FFFFFF",
-    card: "#FFFFFF",
-    cardBorder: "#E4E8EF",
+    bg: "#fafaf7",
+    headerBg: "#ffffff",
+    card: "#ffffff",
+    cardBorder: "#e5e7eb",
     cardShadow: "none",
-    text: "#0F172A",
-    textMuted: "#64748B",
-    textLight: "#94A3B8",
-    inputBg: "#F5F3EE",
-    inputBorder: "#E4E8EF",
-    accent: "#0B2545",
-    accentBg: "#E8EEF7",
-    accentBorder: "rgba(11,37,69,0.15)",
-    dangerBg: "#FEF2F2",
-    dangerBorder: "#FECACA",
+    text: "#0f172a",
+    textMuted: "#64748b",
+    textLight: "#94a3b8",
+    inputBg: "#fafaf7",
+    inputBorder: "#e5e7eb",
+    accent: "#10b981",
+    accentBg: "rgba(16,185,129,0.12)",
+    accentBorder: "rgba(16,185,129,0.3)",
+    dangerBg: "#fef2f2",
+    dangerBorder: "#fecaca",
     danger: "#dc2626",
-    tabBorder: "#E4E8EF",
-    toggleBg: "#F5F3EE",
-    toggleActive: "#FFFFFF",
-    toggleActiveText: "#0F172A",
-    toggleShadow: "0 1px 3px rgba(11,37,69,0.06)",
-    catBtnBg: "#F5F3EE",
-    primary: "#0B2545",
-    highlight: "#F07A2E",
-    highlightBg: "#FFE8D6",
+    tabBorder: "#e5e7eb",
+    toggleBg: "#fafaf7",
+    toggleActive: "#ffffff",
+    toggleActiveText: "#0f172a",
+    toggleShadow: "0 1px 3px rgba(15,23,42,0.06)",
+    catBtnBg: "#fafaf7",
+    primary: "#1e40af",
+    primarySoft: "#eef2ff",
+    highlight: "#10b981",
+    highlightBg: "rgba(16,185,129,0.12)",
   };
 
   const S = {
     input: { width: "100%", padding: "12px 14px", background: T.card, border: `1px solid ${T.inputBorder}`, borderRadius: "12px", color: T.text, fontSize: "14px", fontFamily: "inherit", outline: "none", boxSizing: "border-box" },
     label: { display: "block", fontSize: "11px", color: T.textMuted, marginBottom: "6px", fontWeight: "500", textTransform: "uppercase", letterSpacing: "0.6px" },
     card: { background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "16px", padding: "16px", marginBottom: "14px", boxShadow: T.cardShadow },
-    mono: { fontFamily: '"Instrument Serif", Georgia, serif', fontWeight: "400", letterSpacing: "-0.3px" },
+    mono: { fontFamily: "'IBM Plex Serif', Georgia, serif", fontWeight: "400", letterSpacing: "-0.3px" },
     greenBtn: { flex: 1, padding: "14px", background: T.primary, border: "none", borderRadius: "14px", color: "#fff", fontSize: "15px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", letterSpacing: "-0.2px" },
     ghostBtn: { padding: "14px 20px", background: "transparent", border: `1.5px solid ${T.inputBorder}`, borderRadius: "14px", color: T.text, fontSize: "15px", fontWeight: "500", cursor: "pointer", fontFamily: "inherit" },
   };
@@ -541,7 +543,7 @@ export default function BudgetApp() {
 
   if (pinHash && !unlocked) {
     return (
-      <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "Inter, system-ui, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+      <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "'IBM Plex Sans', system-ui, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
         <div style={{ textAlign: "center", maxWidth: "360px", width: "100%" }}>
           <p style={{ fontSize: "40px", margin: "0 0 10px", opacity: 0.5 }}>🔒</p>
           <h2 style={{ fontSize: "18px", fontWeight: "600", margin: "0 0 6px" }}>Budget Tracker</h2>
@@ -594,7 +596,7 @@ export default function BudgetApp() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "Inter, system-ui, sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
 
       {toast && (
         <div className="toast" style={{ position: "fixed", top: "16px", left: "50%", transform: "translateX(-50%)", zIndex: 1000, padding: "10px 18px", background: toast.type === "err" ? T.danger : T.accent, color: "#fff", borderRadius: "999px", fontSize: "13px", fontWeight: "600", boxShadow: "0 4px 16px rgba(0,0,0,0.2)", maxWidth: "90vw", display: "flex", alignItems: "center", gap: "10px" }}>
@@ -613,7 +615,7 @@ export default function BudgetApp() {
       <div style={{ padding: "24px 20px 16px", borderBottom: `1px solid ${T.tabBorder}`, background: T.headerBg }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
           <div>
-            <h1 style={{ fontSize: "26px", fontWeight: "400", margin: 0, letterSpacing: "-0.8px", color: T.text, fontFamily: '"Instrument Serif", Georgia, serif' }}>budget</h1>
+            <h1 style={{ fontSize: "26px", fontWeight: "400", margin: 0, letterSpacing: "-0.8px", color: T.text, fontFamily: "'IBM Plex Serif', Georgia, serif" }}>budget</h1>
             <p style={{ margin: "4px 0 0", fontSize: "12px", color: T.textLight }}>{items.length === 0 ? "Add items to get started" : `${items.length} items · ${goals.length} goals`}</p>
           </div>
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
@@ -658,24 +660,62 @@ export default function BudgetApp() {
           const billsTotal = upcomingBills.reduce((s, b) => s + (b.amount || 0), 0);
           const safe = liquid - billsTotal;
           const perDay = windowDays > 0 ? safe / windowDays : 0;
+          // Health score approximation
+          const savingsRate = items.filter(i => i.isIncome && !i.cancelled).reduce((s, i) => s + toYr(i.amount, i.frequency), 0) > 0
+            ? (items.filter(i => i.isIncome && !i.cancelled).reduce((s, i) => s + toYr(i.amount, i.frequency), 0) - items.filter(i => !i.isIncome && !i.cancelled).reduce((s, i) => s + toYr(i.amount, i.frequency), 0)) / items.filter(i => i.isIncome && !i.cancelled).reduce((s, i) => s + toYr(i.amount, i.frequency), 0)
+            : 0;
+          const healthScore = Math.round(Math.max(0, Math.min(100, savingsRate * 500)));
+          const monthlyExp = items.filter(i => !i.isIncome && !i.cancelled).reduce((s, i) => s + toYr(i.amount, i.frequency), 0) / 12;
+          const emergencyMo = monthlyExp > 0 ? liquid / monthlyExp : 0;
+
           return (
             <>
-              <div style={{ background: netWorth >= 0 ? T.accentBg : T.dangerBg, border: `1px solid ${netWorth >= 0 ? T.accentBorder : T.dangerBorder}`, borderRadius: "14px", padding: "16px", marginBottom: "10px", textAlign: "center" }}>
-                <p style={{ margin: 0, fontSize: "11px", color: T.textMuted, fontWeight: "600", textTransform: "uppercase", letterSpacing: "1px" }}>Net Worth</p>
-                <p style={{ margin: "6px 0 0", fontSize: "26px", ...S.mono, color: netWorth >= 0 ? T.accent : T.danger }}>{fmt(netWorth)}</p>
-                <div style={{ display: "flex", justifyContent: "center", gap: "16px", marginTop: "6px", fontSize: "10px", color: T.textLight }}>
-                  <span>Assets: <span style={{ ...S.mono, color: T.accent }}>{fmt(totalAssets)}</span></span>
-                  <span>Debt: <span style={{ ...S.mono, color: T.danger }}>{fmt(totalLiabilities)}</span></span>
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr)", gap: "12px", marginBottom: "14px" }} className="dash-hero-grid">
+                {/* Hero Leftover card */}
+                <div style={{ background: T.primary, color: "#fff", borderRadius: "16px", padding: "24px", position: "relative", overflow: "hidden", minHeight: "170px" }}>
+                  <div style={{ position: "absolute", top: "-60px", right: "-40px", width: "200px", height: "200px", borderRadius: "50%", background: `radial-gradient(circle, ${T.highlight}55, transparent 70%)` }} />
+                  <div style={{ position: "relative" }}>
+                    <p style={{ margin: 0, fontSize: "11px", opacity: 0.7, textTransform: "uppercase", letterSpacing: "1px" }}>{liquid > 0 ? `Safe to spend · next ${windowDays} days` : `Leftover · ${view}`}</p>
+                    <p style={{ margin: "8px 0 0", fontSize: "48px", ...S.mono, letterSpacing: "-1.5px", lineHeight: 1 }}>
+                      {fmt(liquid > 0 ? safe : leftover).replace(/(\.\d\d)$/, "")}
+                      <span style={{ fontSize: "24px", opacity: 0.6 }}>{fmt(liquid > 0 ? safe : leftover).match(/\.\d\d$/)?.[0] || ""}</span>
+                    </p>
+                    <p style={{ margin: "10px 0 0", fontSize: "13px", opacity: 0.75 }}>{liquid > 0 ? `${fmt(perDay)} per day` : "per " + view.replace(/ly$/, "")}</p>
+                  </div>
+                </div>
+                {/* Health score card */}
+                <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "16px", padding: "18px" }}>
+                  <p style={{ margin: 0, fontSize: "11px", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>Health</p>
+                  <p style={{ margin: "6px 0 0", fontSize: "32px", ...S.mono, color: T.text, letterSpacing: "-0.8px" }}>{healthScore}<span style={{ fontSize: "14px", color: T.textLight, marginLeft: "4px" }}>/100</span></p>
+                  <p style={{ margin: "4px 0 0", fontSize: "12px", color: T.textMuted }}>{healthScore >= 70 ? "doing well" : healthScore >= 40 ? "building up" : "room to improve"}</p>
+                  <div style={{ marginTop: "12px", height: "4px", background: T.inputBg, borderRadius: "3px", overflow: "hidden" }}>
+                    <div style={{ width: `${healthScore}%`, height: "100%", background: healthScore >= 70 ? T.accent : healthScore >= 40 ? "#d97706" : T.danger }} />
+                  </div>
+                </div>
+                {/* Emergency fund card */}
+                <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "16px", padding: "18px" }}>
+                  <p style={{ margin: 0, fontSize: "11px", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>Emergency</p>
+                  <p style={{ margin: "6px 0 0", fontSize: "32px", ...S.mono, color: T.text, letterSpacing: "-0.8px" }}>{emergencyMo.toFixed(1)}<span style={{ fontSize: "14px", color: T.textLight, marginLeft: "4px" }}>mo</span></p>
+                  <p style={{ margin: "4px 0 0", fontSize: "12px", color: T.textMuted }}>target 3mo</p>
+                  <div style={{ marginTop: "12px", height: "4px", background: T.inputBg, borderRadius: "3px", overflow: "hidden" }}>
+                    <div style={{ width: `${Math.min(100, (emergencyMo / 6) * 100)}%`, height: "100%", background: T.primary }} />
+                  </div>
                 </div>
               </div>
-              {liquid > 0 && (
-                <div style={{ background: safe >= 0 ? T.accentBg : T.dangerBg, border: `1px solid ${safe >= 0 ? T.accentBorder : T.dangerBorder}`, borderRadius: "14px", padding: "20px", marginBottom: "16px", textAlign: "center" }}>
-                  <p style={{ margin: 0, fontSize: "11px", color: T.textMuted, fontWeight: "600", textTransform: "uppercase", letterSpacing: "1px" }}>Safe to Spend · next {windowDays} days</p>
-                  <p style={{ margin: "8px 0 0", fontSize: "32px", ...S.mono, color: safe >= 0 ? T.accent : T.danger, letterSpacing: "-1px" }}>{fmt(safe)}</p>
-                  <p style={{ margin: "4px 0 0", fontSize: "11px", color: T.textLight }}>{fmt(perDay)} per day</p>
-                  {billsTotal > 0 && <p style={{ margin: "6px 0 0", fontSize: "10px", color: T.textLight }}>{fmt(liquid)} available − {fmt(billsTotal)} upcoming bills</p>}
+
+              {/* Net worth strip */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+                <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "16px", padding: "16px" }}>
+                  <p style={{ margin: 0, fontSize: "11px", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>Net worth</p>
+                  <p style={{ margin: "6px 0 0", fontSize: "24px", ...S.mono, color: netWorth >= 0 ? T.text : T.danger, letterSpacing: "-0.6px" }}>{fmt(netWorth)}</p>
+                  <p style={{ margin: "4px 0 0", fontSize: "11px", color: T.textLight }}>{fmt(totalAssets)} − {fmt(totalLiabilities)}</p>
                 </div>
-              )}
+                <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "16px", padding: "16px" }}>
+                  <p style={{ margin: 0, fontSize: "11px", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>Upcoming bills</p>
+                  <p style={{ margin: "6px 0 0", fontSize: "24px", ...S.mono, color: T.text, letterSpacing: "-0.6px" }}>{fmt(billsTotal)}</p>
+                  <p style={{ margin: "4px 0 0", fontSize: "11px", color: T.textLight }}>next {windowDays} days</p>
+                </div>
+              </div>
             </>
           );
         })()}
