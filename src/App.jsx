@@ -10,6 +10,7 @@ import { computeCoach, generateInsights, scoreLabel } from "./lib/coach.js";
 import { askGemini, buildFinancialContext, getStoredKey, storeKey } from "./lib/ai.js";
 import { hashPin, getStoredPinHash, storePinHash } from "./lib/pin.js";
 import Onboarding from "./components/Onboarding.jsx";
+import Landing from "./components/Landing.jsx";
 
 export default function BudgetApp() {
   const [items, setItems] = useState([]);
@@ -89,7 +90,9 @@ export default function BudgetApp() {
   const [pinDraft, setPinDraft] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
   const [onboarded, setOnboarded] = useState(true);
+  const [stage, setStage] = useState("app"); // landing | signup | app
   const forceWelcome = typeof window !== "undefined" && /[?&](welcome|signup)\b/i.test(window.location.search);
+  const forceLanding = typeof window !== "undefined" && /[?&]landing\b/i.test(window.location.search);
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const fmt = useMemo(() => makeFmt(currency), [currency]);
 
@@ -112,13 +115,18 @@ export default function BudgetApp() {
       if (d.darkMode !== undefined && d.darkModeAuto === false) setDarkMode(d.darkMode);
       if (d.currency && CURRENCIES.some((c) => c.code === d.currency)) setCurrency(d.currency);
       const SEEN_KEY = "budget-app-welcome-v1";
+      const LANDING_KEY = "budget-app-landing-seen";
       const hasSeen = (() => { try { return localStorage.getItem(SEEN_KEY) === "1"; } catch { return false; } })();
+      const landingSeen = (() => { try { return localStorage.getItem(LANDING_KEY) === "1"; } catch { return false; } })();
       if (!hasSeen) {
         setOnboarded(false);
+        if (!landingSeen) setStage("landing");
+        else setStage("signup");
       } else if (d.onboarded !== undefined) setOnboarded(d.onboarded);
       else if ((d.items?.length || 0) === 0 && (d.accounts?.length || 0) === 0 && (d.transactions?.length || 0) === 0) setOnboarded(false);
     } else {
       setOnboarded(false);
+      setStage("landing");
     }
     setLoaded(true);
   }, []);
@@ -554,6 +562,16 @@ export default function BudgetApp() {
         </div>
       </div>
     );
+  }
+
+  if (forceLanding || (loaded && !onboarded && stage === "landing")) {
+    return <Landing onGetStarted={() => {
+      try { localStorage.setItem("budget-app-landing-seen", "1"); } catch {}
+      setStage("signup");
+      if (typeof window !== "undefined" && window.history?.replaceState && forceLanding) {
+        try { window.history.replaceState({}, "", window.location.pathname); } catch {}
+      }
+    }} />;
   }
 
   if ((loaded && !onboarded) || forceWelcome) {
@@ -1106,8 +1124,9 @@ export default function BudgetApp() {
                   {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
                 </select>
               </div>
-              <div style={{ marginBottom: "14px" }}>
-                <button onClick={() => { setOnboarded(false); setActiveTab("dashboard"); }} style={{ width: "100%", padding: "10px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "8px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Replay welcome flow</button>
+              <div style={{ marginBottom: "14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                <button onClick={() => { setOnboarded(false); setStage("signup"); setActiveTab("dashboard"); }} style={{ padding: "10px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "8px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Replay signup</button>
+                <button onClick={() => { setOnboarded(false); setStage("landing"); setActiveTab("dashboard"); }} style={{ padding: "10px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "8px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>View landing page</button>
               </div>
 
               <div style={{ marginBottom: "14px" }}>

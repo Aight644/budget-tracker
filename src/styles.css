@@ -55,6 +55,12 @@ input:focus, select:focus, textarea:focus {
   .dash-hero-grid { grid-template-columns: 1fr 1fr !important; }
 }
 
+/* Landing page responsive */
+@media (max-width: 900px) {
+  .landing-hero { grid-template-columns: 1fr !important; padding: 48px 20px !important; }
+  .landing-nav-links, .landing-signin { display: none !important; }
+}
+
 /* App shell: sidebar on desktop, flat on mobile */
 .app-shell { min-height: 100dvh; }
 .app-main { min-width: 0; }
