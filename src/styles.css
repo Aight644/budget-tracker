@@ -44,7 +44,12 @@ input:focus, select:focus, textarea:focus { outline: none; }
 
 /* App shell: sidebar on desktop, mobile top + bottom bars on mobile */
 .app-shell { min-height: 100dvh; }
-.app-main { min-width: 0; }
+.app-main { min-width: 0; padding: 28px 32px 80px; }
+.app-content-padding { padding: 0; }
+
+/* Legacy top chrome is replaced by sidebar / mobile bars — hide everywhere */
+.app-top-header, .app-top-tabs { display: none !important; }
+
 @media (min-width: 1001px) {
   .app-mobile-top, .app-mobile-tabs { display: none !important; }
 }
@@ -55,7 +60,6 @@ input:focus, select:focus, textarea:focus { outline: none; }
   .app-mobile-top { display: flex !important; }
   .app-mobile-tabs { display: flex !important; }
   .mobile-only { display: none !important; }
-  .app-top-header, .app-top-tabs { display: none !important; }
 }
 
 /* Dashboard grids */

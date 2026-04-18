@@ -744,7 +744,7 @@ export default function BudgetApp() {
         ))}
       </div>
 
-      <div style={{ padding: "16px 20px 120px" }}>
+      <div className="app-content-padding">
 
         {/* DASHBOARD — new design-language view */}
         {activeTab === "dashboard" && (
