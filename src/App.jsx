@@ -11,6 +11,8 @@ import { askGemini, buildFinancialContext, getStoredKey, storeKey } from "./lib/
 import { hashPin, getStoredPinHash, storePinHash } from "./lib/pin.js";
 import Onboarding from "./components/Onboarding.jsx";
 import Landing from "./components/Landing.jsx";
+import AuthPanel from "./components/AuthPanel.jsx";
+import { pullUserData, schedulePush, signOut, getCurrentUser, onAuthChange } from "./lib/sync.js";
 
 export default function BudgetApp() {
   const [items, setItems] = useState([]);
@@ -91,6 +93,9 @@ export default function BudgetApp() {
   const [pinConfirm, setPinConfirm] = useState("");
   const [onboarded, setOnboarded] = useState(true);
   const [stage, setStage] = useState("app"); // landing | signup | app
+  const [user, setUser] = useState(null);
+  const [syncState, setSyncState] = useState("idle"); // idle | pulling | pushing | error
+  const [syncError, setSyncError] = useState(null);
   const forceWelcome = typeof window !== "undefined" && /[?&](welcome|signup)\b/i.test(window.location.search);
   const forceLanding = typeof window !== "undefined" && /[?&]landing\b/i.test(window.location.search);
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
@@ -168,6 +173,43 @@ export default function BudgetApp() {
     reset();
     return () => { clearTimeout(timer); events.forEach((e) => document.removeEventListener(e, reset)); };
   }, [pinHash, unlocked]);
+
+  useEffect(() => {
+    getCurrentUser().then((u) => setUser(u));
+    const unsub = onAuthChange((u) => setUser(u));
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    if (!user || !loaded) return;
+    setSyncState("pulling");
+    pullUserData(user.id)
+      .then((remote) => {
+        if (remote?.data) {
+          const d = remote.data;
+          if (Array.isArray(d.items)) setItems(d.items);
+          if (Array.isArray(d.goals)) setGoals(d.goals);
+          if (Array.isArray(d.accounts)) setAccounts(d.accounts);
+          if (Array.isArray(d.transactions)) setTransactions(d.transactions);
+          if (d.categoryBudgets && typeof d.categoryBudgets === "object") setCategoryBudgets(d.categoryBudgets);
+          if (Array.isArray(d.netWorthHistory)) setNetWorthHistory(d.netWorthHistory);
+          if (d.view) setView(d.view);
+          if (d.currency && CURRENCIES.some((c) => c.code === d.currency)) setCurrency(d.currency);
+          if (d.onboarded !== undefined) setOnboarded(d.onboarded);
+        }
+        setSyncState("idle");
+      })
+      .catch((e) => { setSyncState("error"); setSyncError(e.message); });
+  }, [user, loaded]);
+
+  useEffect(() => {
+    if (!user || !loaded) return;
+    const blob = { items, goals, accounts, transactions, categoryBudgets, netWorthHistory, view, darkMode, darkModeAuto, currency, onboarded };
+    schedulePush(user.id, blob);
+    setSyncState("pushing");
+    const t = setTimeout(() => setSyncState("idle"), 2500);
+    return () => clearTimeout(t);
+  }, [user, loaded, items, goals, accounts, transactions, categoryBudgets, view, currency, onboarded]);
 
   useEffect(() => {
     if (!darkModeAuto || typeof window === "undefined" || !window.matchMedia) return;
@@ -1124,6 +1166,28 @@ export default function BudgetApp() {
                   {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
                 </select>
               </div>
+              <div style={{ marginBottom: "14px" }}>
+                <label style={S.label}>Cloud Sync</label>
+                {user ? (
+                  <div>
+                    <div style={{ padding: "10px 12px", background: T.accentBg, border: `1px solid ${T.accentBorder}`, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <p style={{ margin: 0, fontSize: "12px", fontWeight: 600, color: T.accent }}>✓ Signed in as {user.email}</p>
+                        <p style={{ margin: "2px 0 0", fontSize: "10px", color: T.textLight }}>
+                          {syncState === "pulling" ? "Pulling latest..." : syncState === "pushing" ? "Syncing..." : syncState === "error" ? `Error: ${syncError}` : "Synced · auto-saves"}
+                        </p>
+                      </div>
+                    </div>
+                    <button onClick={async () => { try { await signOut(); setUser(null); showToast("Signed out", "ok"); } catch (e) { showToast(e.message, "err"); } }} style={{ width: "100%", padding: "8px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "8px", color: T.textMuted, fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>Sign out</button>
+                  </div>
+                ) : (
+                  <div style={{ padding: "12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px" }}>
+                    <p style={{ margin: "0 0 10px", fontSize: "11px", color: T.textLight, lineHeight: 1.5 }}>Sign in to sync across devices. Your data is stored encrypted on Supabase, only visible to you.</p>
+                    <AuthPanel compact onSuccess={(u) => { setUser(u); showToast("Welcome back — pulling your data...", "ok"); }} />
+                  </div>
+                )}
+              </div>
+
               <div style={{ marginBottom: "14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
                 <button onClick={() => { setOnboarded(false); setStage("signup"); setActiveTab("dashboard"); }} style={{ padding: "10px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "8px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Replay signup</button>
                 <button onClick={() => { setOnboarded(false); setStage("landing"); setActiveTab("dashboard"); }} style={{ padding: "10px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "8px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>View landing page</button>
