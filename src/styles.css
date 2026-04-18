@@ -54,3 +54,27 @@ input:focus, select:focus, textarea:focus {
 @media (min-width: 721px) and (max-width: 1100px) {
   .dash-hero-grid { grid-template-columns: 1fr 1fr !important; }
 }
+
+/* App shell: sidebar on desktop, flat on mobile */
+.app-shell { min-height: 100dvh; }
+.app-main { min-width: 0; }
+@media (min-width: 900px) {
+  .app-shell {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+  .app-sidebar {
+    display: flex !important;
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    overflow-y: auto;
+  }
+  .mobile-only { display: none !important; }
+  .app-main > .app-top-tabs,
+  .app-main > .app-top-header {
+    display: none !important;
+  }
+}
