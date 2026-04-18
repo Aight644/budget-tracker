@@ -69,6 +69,7 @@ export default function BudgetApp() {
   const csvFileRef = useRef(null);
   const [categoryBudgets, setCategoryBudgets] = useState({});
   const [showBudgetEditor, setShowBudgetEditor] = useState(false);
+  const [netWorthHistory, setNetWorthHistory] = useState([]);
   const [clearTxnsConfirm, setClearTxnsConfirm] = useState(false);
   const [collapsedMonths, setCollapsedMonths] = useState(new Set());
   const [txnSearch, setTxnSearch] = useState("");
@@ -95,6 +96,7 @@ export default function BudgetApp() {
       if (Array.isArray(d.accounts)) setAccounts(d.accounts);
       if (Array.isArray(d.transactions)) setTransactions(d.transactions);
       if (d.categoryBudgets && typeof d.categoryBudgets === "object") setCategoryBudgets(d.categoryBudgets);
+      if (Array.isArray(d.netWorthHistory)) setNetWorthHistory(d.netWorthHistory);
       if (d.view) setView(d.view);
       if (d.darkModeAuto !== undefined) setDarkModeAuto(d.darkModeAuto);
       if (d.darkMode !== undefined && d.darkModeAuto === false) setDarkMode(d.darkMode);
@@ -102,6 +104,26 @@ export default function BudgetApp() {
     }
     setLoaded(true);
   }, []);
+
+  useEffect(() => {
+    if (!loaded) return;
+    if (accounts.length === 0) return;
+    const nw = accounts.filter(a => a.includeInNetWorth !== false).reduce((s, a) => {
+      const t = ACCOUNT_TYPES.find(t => t.id === a.type);
+      const sign = t && t.isLiability ? -1 : 1;
+      return s + (a.balance || 0) * sign;
+    }, 0);
+    const today = new Date().toISOString().slice(0, 10);
+    setNetWorthHistory(prev => {
+      const last = prev[prev.length - 1];
+      if (last && last.date === today) {
+        if (Math.abs(last.value - nw) < 0.005) return prev;
+        return [...prev.slice(0, -1), { date: today, value: nw }];
+      }
+      const trimmed = prev.length > 365 ? prev.slice(-365) : prev;
+      return [...trimmed, { date: today, value: nw }];
+    });
+  }, [loaded, accounts]);
 
   useEffect(() => {
     if (!darkModeAuto || typeof window === "undefined" || !window.matchMedia) return;
@@ -114,9 +136,9 @@ export default function BudgetApp() {
 
   useEffect(() => {
     if (!loaded) return;
-    const r = saveStored({ items, goals, accounts, transactions, categoryBudgets, view, darkMode, darkModeAuto, currency });
+    const r = saveStored({ items, goals, accounts, transactions, categoryBudgets, netWorthHistory, view, darkMode, darkModeAuto, currency });
     setSaveError(r.ok ? null : r.error);
-  }, [items, goals, accounts, transactions, categoryBudgets, view, darkMode, darkModeAuto, currency, loaded]);
+  }, [items, goals, accounts, transactions, categoryBudgets, netWorthHistory, view, darkMode, darkModeAuto, currency, loaded]);
 
   const handleExport = () => {
     const payload = { version: SCHEMA_VERSION, exportedAt: new Date().toISOString(), items, goals, accounts, transactions, categoryBudgets, view, darkMode, currency };
@@ -144,6 +166,7 @@ export default function BudgetApp() {
         if (Array.isArray(d.accounts)) setAccounts(d.accounts);
         if (Array.isArray(d.transactions)) setTransactions(d.transactions);
         if (d.categoryBudgets && typeof d.categoryBudgets === "object") setCategoryBudgets(d.categoryBudgets);
+      if (Array.isArray(d.netWorthHistory)) setNetWorthHistory(d.netWorthHistory);
         if (d.view) setView(d.view);
         if (d.darkMode !== undefined) setDarkMode(d.darkMode);
         if (d.currency && CURRENCIES.some((c) => c.code === d.currency)) setCurrency(d.currency);
@@ -1032,6 +1055,32 @@ export default function BudgetApp() {
                 <p style={{ margin: 0, fontSize: "11px", color: T.textMuted, fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>Net Worth</p>
                 <p style={{ margin: "6px 0 0", fontSize: "26px", ...S.mono, color: netWorth >= 0 ? T.accent : T.danger }}>{fmt(netWorth)}</p>
                 <p style={{ margin: "4px 0 0", fontSize: "10px", color: T.textLight }}>{fmt(totalAssets)} assets − {fmt(totalLiabilities)} debt</p>
+                {netWorthHistory.length >= 2 && (() => {
+                  const hist = netWorthHistory.slice(-90);
+                  const values = hist.map(h => h.value);
+                  const min = Math.min(...values);
+                  const max = Math.max(...values);
+                  const range = max - min || 1;
+                  const w = 300, h = 60, pad = 4;
+                  const pts = hist.map((p, i) => {
+                    const x = pad + (i / (hist.length - 1)) * (w - pad * 2);
+                    const y = pad + (1 - (p.value - min) / range) * (h - pad * 2);
+                    return `${x.toFixed(1)},${y.toFixed(1)}`;
+                  }).join(" ");
+                  const first = values[0];
+                  const last = values[values.length - 1];
+                  const change = last - first;
+                  const pct = first !== 0 ? (change / Math.abs(first)) * 100 : 0;
+                  const trendColor = change >= 0 ? T.accent : T.danger;
+                  return (
+                    <div style={{ marginTop: "10px" }}>
+                      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none" style={{ display: "block" }}>
+                        <polyline points={pts} fill="none" stroke={trendColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <p style={{ margin: "6px 0 0", fontSize: "10px", color: T.textLight }}>{hist.length}-day trend · <span style={{ color: trendColor, ...S.mono }}>{change >= 0 ? "+" : ""}{fmt(change)} ({pct.toFixed(1)}%)</span></p>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
