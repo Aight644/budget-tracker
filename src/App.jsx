@@ -89,6 +89,7 @@ export default function BudgetApp() {
   const [pinDraft, setPinDraft] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
   const [onboarded, setOnboarded] = useState(true);
+  const forceWelcome = typeof window !== "undefined" && /[?&](welcome|signup)\b/i.test(window.location.search);
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const fmt = useMemo(() => makeFmt(currency), [currency]);
 
@@ -529,7 +530,7 @@ export default function BudgetApp() {
     );
   }
 
-  if (loaded && !onboarded) {
+  if ((loaded && !onboarded) || forceWelcome) {
     const GOAL_TEMPLATES = {
       emergency: { name: "Emergency fund", target: 5000, saved: 0, monthlySaving: 200, deadline: "", color: "#2563eb" },
       debt: { name: "Pay off debt", target: 5000, saved: 0, monthlySaving: 200, deadline: "", color: "#dc2626" },
@@ -549,6 +550,9 @@ export default function BudgetApp() {
           }
           setOnboarded(true);
           try { localStorage.setItem("budget-app-welcome-v1", "1"); } catch {}
+          if (typeof window !== "undefined" && window.history?.replaceState) {
+            try { window.history.replaceState({}, "", window.location.pathname); } catch {}
+          }
           if (data.action === "csv") {
             setActiveTab("transactions");
           }
