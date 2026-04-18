@@ -579,7 +579,7 @@ export default function BudgetApp() {
           const liquid = accounts.filter(a => liquidTypes.includes(a.type)).reduce((s, a) => s + (a.balance || 0), 0);
           const windowDays = view === "fortnightly" ? 14 : view === "monthly" ? 30 : 365;
           const upcomingBills = items
-            .filter(i => !i.isIncome && i.dueDate)
+            .filter(i => !i.isIncome && !i.cancelled && i.dueDate)
             .map(i => ({ ...i, dueDate: rollForwardDue(i.dueDate, i.frequency), days: 0 }))
             .map(i => ({ ...i, days: daysUntil(i.dueDate) }))
             .filter(i => i.days !== null && i.days >= 0 && i.days <= windowDays);
@@ -701,7 +701,7 @@ export default function BudgetApp() {
 
             {(() => {
               const billsWithDue = items
-                .filter(i => !i.isIncome && i.dueDate)
+                .filter(i => !i.isIncome && !i.cancelled && i.dueDate)
                 .map(i => ({ ...i, dueDate: rollForwardDue(i.dueDate, i.frequency) }))
                 .map(i => ({ ...i, days: daysUntil(i.dueDate) }))
                 .filter(i => i.days !== null && i.days <= 30)

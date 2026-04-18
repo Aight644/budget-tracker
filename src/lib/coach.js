@@ -3,8 +3,8 @@ import { toYr, toMo } from "./calc.js";
 const LIQUID_TYPES = ["checking", "savings", "cash"];
 
 export function computeCoach({ items, goals, accounts, transactions, categoryBudgets }) {
-  const incomeItems = items.filter((i) => i.isIncome);
-  const expenseItems = items.filter((i) => !i.isIncome);
+  const incomeItems = items.filter((i) => i.isIncome && !i.cancelled);
+  const expenseItems = items.filter((i) => !i.isIncome && !i.cancelled);
   const yearlyIncome = incomeItems.reduce((s, i) => s + toYr(i.amount, i.frequency), 0);
   const yearlyExpenses = expenseItems.reduce((s, i) => s + toYr(i.amount, i.frequency), 0);
   const monthlyIncome = yearlyIncome / 12;
