@@ -129,8 +129,8 @@ export default function AuthScreen({ initialMode = "signup", onSuccess, onBack }
           {isSignUp && (
             <p style={{ fontSize: 11, color: C.muted, textAlign: "center", margin: "4px 0 0", lineHeight: 1.5 }}>
               By creating an account you agree to our{" "}
-              <a href="#" style={{ color: C.primary, textDecoration: "underline" }}>Terms</a> and{" "}
-              <a href="#" style={{ color: C.primary, textDecoration: "underline" }}>Privacy Policy</a>.
+              <a href="/terms" style={{ color: C.primary, textDecoration: "underline" }}>Terms</a> and{" "}
+              <a href="/privacy" style={{ color: C.primary, textDecoration: "underline" }}>Privacy Policy</a>.
             </p>
           )}
         </form>

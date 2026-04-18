@@ -20,6 +20,7 @@ import SubscriptionsView from "./components/SubscriptionsView.jsx";
 import { Sidebar, MobileTopBar, MobileTabBar } from "./components/AppShell.jsx";
 import { makeTheme, FONT as DESIGN_FONT } from "./lib/theme.js";
 import { toFn } from "./lib/calc.js";
+import { showBanner, hideBanner, isNative } from "./lib/ads.js";
 
 const HAS_ACCOUNT_KEY = "budget-app-has-account";
 const SKIP_SIGNIN_KEY = "budget-app-skip-signin";
@@ -185,6 +186,12 @@ export default function BudgetApp() {
   }, [loaded, accounts]);
 
   // PIN auto-lock disabled; cloud auth is now the primary session gate.
+
+  useEffect(() => {
+    if (!isNative()) return;
+    showBanner({ useTest: true });
+    return () => { hideBanner(); };
+  }, []);
 
   useEffect(() => {
     getCurrentUser().then((u) => { setUser(u); setAuthChecked(true); if (u) { try { localStorage.setItem(HAS_ACCOUNT_KEY, "1"); } catch {} setHasAccount(true); } });
