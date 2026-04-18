@@ -31,9 +31,25 @@ export default function BudgetApp() {
   });
   const [darkModeAuto, setDarkModeAuto] = useState(true);
   const [toast, setToast] = useState(null);
-  const showToast = (text, type = "ok") => {
-    setToast({ text, type, id: Date.now() });
-    setTimeout(() => setToast(null), 3000);
+  const toastTimerRef = useRef(null);
+  const showToast = (text, type = "ok", action = null) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ text, type, action, id: Date.now() });
+    toastTimerRef.current = setTimeout(() => setToast(null), action ? 8000 : 3000);
+  };
+  const snapshotState = () => ({
+    items: [...items],
+    goals: [...goals],
+    accounts: [...accounts],
+    transactions: [...transactions],
+    categoryBudgets: { ...categoryBudgets },
+  });
+  const restoreSnapshot = (s) => {
+    setItems(s.items);
+    setGoals(s.goals);
+    setAccounts(s.accounts);
+    setTransactions(s.transactions);
+    setCategoryBudgets(s.categoryBudgets);
   };
   const [accounts, setAccounts] = useState([]);
   const [showAccountForm, setShowAccountForm] = useState(false);
@@ -419,7 +435,12 @@ export default function BudgetApp() {
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
       {toast && (
-        <div className="toast" style={{ position: "fixed", top: "16px", left: "50%", transform: "translateX(-50%)", zIndex: 1000, padding: "10px 18px", background: toast.type === "err" ? T.danger : T.accent, color: "#fff", borderRadius: "999px", fontSize: "13px", fontWeight: "600", boxShadow: "0 4px 16px rgba(0,0,0,0.2)", maxWidth: "90vw" }}>{toast.text}</div>
+        <div className="toast" style={{ position: "fixed", top: "16px", left: "50%", transform: "translateX(-50%)", zIndex: 1000, padding: "10px 18px", background: toast.type === "err" ? T.danger : T.accent, color: "#fff", borderRadius: "999px", fontSize: "13px", fontWeight: "600", boxShadow: "0 4px 16px rgba(0,0,0,0.2)", maxWidth: "90vw", display: "flex", alignItems: "center", gap: "10px" }}>
+          <span>{toast.text}</span>
+          {toast.action && (
+            <button onClick={() => { toast.action.fn(); setToast(null); }} style={{ background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.4)", color: "#fff", padding: "4px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: "700", cursor: "pointer", fontFamily: "inherit" }}>{toast.action.label}</button>
+          )}
+        </div>
       )}
 
       {fabVisible && (
@@ -779,7 +800,13 @@ export default function BudgetApp() {
 
             {(items.length > 0 || goals.length > 0 || accounts.length > 0 || transactions.length > 0) && (clearConfirm ? (
               <div style={{ display: "flex", gap: "8px" }}>
-                <button onClick={() => { setItems([]); setGoals([]); setAccounts([]); setTransactions([]); setCategoryBudgets({}); clearStored(); setClearConfirm(false); }} style={{ flex: 1, padding: "12px", background: T.dangerBg, border: `1px solid ${T.dangerBorder}`, borderRadius: "10px", color: T.danger, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Yes, erase everything</button>
+                <button onClick={() => {
+                  const snap = snapshotState();
+                  setItems([]); setGoals([]); setAccounts([]); setTransactions([]); setCategoryBudgets({});
+                  clearStored();
+                  setClearConfirm(false);
+                  showToast("All data cleared", "ok", { label: "Undo", fn: () => restoreSnapshot(snap) });
+                }} style={{ flex: 1, padding: "12px", background: T.dangerBg, border: `1px solid ${T.dangerBorder}`, borderRadius: "10px", color: T.danger, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Yes, erase everything</button>
                 <button onClick={() => setClearConfirm(false)} style={{ flex: 1, padding: "12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
               </div>
             ) : (
@@ -1230,7 +1257,12 @@ export default function BudgetApp() {
                 <div style={{ marginTop: "24px" }}>
                   {clearTxnsConfirm ? (
                     <div style={{ display: "flex", gap: "8px" }}>
-                      <button onClick={() => { setTransactions([]); setClearTxnsConfirm(false); }} style={{ flex: 1, padding: "12px", background: T.dangerBg, border: `1px solid ${T.dangerBorder}`, borderRadius: "10px", color: T.danger, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Yes, delete {transactions.length} transactions</button>
+                      <button onClick={() => {
+                        const prev = [...transactions];
+                        setTransactions([]);
+                        setClearTxnsConfirm(false);
+                        showToast(`${prev.length} transactions cleared`, "ok", { label: "Undo", fn: () => setTransactions(prev) });
+                      }} style={{ flex: 1, padding: "12px", background: T.dangerBg, border: `1px solid ${T.dangerBorder}`, borderRadius: "10px", color: T.danger, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Yes, delete {transactions.length} transactions</button>
                       <button onClick={() => setClearTxnsConfirm(false)} style={{ flex: 1, padding: "12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px", color: T.textMuted, fontSize: "12px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                     </div>
                   ) : (
