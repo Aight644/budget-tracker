@@ -144,6 +144,24 @@ export default function BudgetApp() {
   }, [loaded, accounts]);
 
   useEffect(() => {
+    if (!pinHash) return;
+    const onVisibility = () => { if (document.hidden) setUnlocked(false); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [pinHash]);
+
+  useEffect(() => {
+    if (!pinHash || !unlocked) return;
+    const IDLE_MS = 10 * 60 * 1000;
+    let timer;
+    const reset = () => { clearTimeout(timer); timer = setTimeout(() => setUnlocked(false), IDLE_MS); };
+    const events = ["mousedown", "keydown", "touchstart", "scroll"];
+    events.forEach((e) => document.addEventListener(e, reset, { passive: true }));
+    reset();
+    return () => { clearTimeout(timer); events.forEach((e) => document.removeEventListener(e, reset)); };
+  }, [pinHash, unlocked]);
+
+  useEffect(() => {
     if (!darkModeAuto || typeof window === "undefined" || !window.matchMedia) return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = (e) => setDarkMode(e.matches);
@@ -444,60 +462,66 @@ export default function BudgetApp() {
   const barMax = Math.max(...categoryTotals.map(c => c.total), 1);
 
   const T = darkMode ? {
-    bg: "#0a0a0f",
-    headerBg: "#111118",
-    card: "rgba(255,255,255,0.03)",
-    cardBorder: "rgba(255,255,255,0.06)",
+    bg: "#071A36",
+    headerBg: "#0B2545",
+    card: "rgba(255,255,255,0.04)",
+    cardBorder: "rgba(255,255,255,0.08)",
     cardShadow: "none",
-    text: "#e4e4e7",
-    textMuted: "#a1a1aa",
-    textLight: "#71717a",
-    inputBg: "rgba(0,0,0,0.3)",
-    inputBorder: "rgba(255,255,255,0.1)",
-    accent: "#22c55e",
-    accentBg: "rgba(34,197,94,0.08)",
-    accentBorder: "rgba(34,197,94,0.15)",
-    dangerBg: "rgba(239,68,68,0.08)",
-    dangerBorder: "rgba(239,68,68,0.15)",
-    danger: "#ef4444",
-    tabBorder: "rgba(255,255,255,0.06)",
+    text: "#E8EEF7",
+    textMuted: "#9AA7BB",
+    textLight: "#64748B",
+    inputBg: "rgba(255,255,255,0.04)",
+    inputBorder: "rgba(255,255,255,0.12)",
+    accent: "#F07A2E",
+    accentBg: "rgba(240,122,46,0.12)",
+    accentBorder: "rgba(240,122,46,0.3)",
+    dangerBg: "rgba(220,38,38,0.10)",
+    dangerBorder: "rgba(220,38,38,0.22)",
+    danger: "#F87171",
+    tabBorder: "rgba(255,255,255,0.08)",
     toggleBg: "rgba(255,255,255,0.05)",
     toggleActive: "rgba(255,255,255,0.12)",
     toggleActiveText: "#fff",
     toggleShadow: "none",
-    catBtnBg: "rgba(0,0,0,0.2)",
+    catBtnBg: "rgba(255,255,255,0.04)",
+    primary: "#F07A2E",
+    highlight: "#F07A2E",
+    highlightBg: "rgba(240,122,46,0.14)",
   } : {
-    bg: "#faf9f7",
-    headerBg: "#ffffff",
-    card: "#ffffff",
-    cardBorder: "#e8e5e0",
-    cardShadow: "0 1px 3px rgba(0,0,0,0.04)",
-    text: "#1a1a1a",
-    textMuted: "#6b6560",
-    textLight: "#9c9690",
-    inputBg: "#f5f3f0",
-    inputBorder: "#ddd9d3",
-    accent: "#16a34a",
-    accentBg: "#f0fdf4",
-    accentBorder: "#bbf7d0",
-    dangerBg: "#fef2f2",
-    dangerBorder: "#fecaca",
+    bg: "#FAF7F2",
+    headerBg: "#FFFFFF",
+    card: "#FFFFFF",
+    cardBorder: "#E4E8EF",
+    cardShadow: "none",
+    text: "#0F172A",
+    textMuted: "#64748B",
+    textLight: "#94A3B8",
+    inputBg: "#F5F3EE",
+    inputBorder: "#E4E8EF",
+    accent: "#0B2545",
+    accentBg: "#E8EEF7",
+    accentBorder: "rgba(11,37,69,0.15)",
+    dangerBg: "#FEF2F2",
+    dangerBorder: "#FECACA",
     danger: "#dc2626",
-    tabBorder: "#ece9e4",
-    toggleBg: "#f5f3f0",
-    toggleActive: "#ffffff",
-    toggleActiveText: "#1a1a1a",
-    toggleShadow: "0 1px 3px rgba(0,0,0,0.08)",
-    catBtnBg: "#f5f3f0",
+    tabBorder: "#E4E8EF",
+    toggleBg: "#F5F3EE",
+    toggleActive: "#FFFFFF",
+    toggleActiveText: "#0F172A",
+    toggleShadow: "0 1px 3px rgba(11,37,69,0.06)",
+    catBtnBg: "#F5F3EE",
+    primary: "#0B2545",
+    highlight: "#F07A2E",
+    highlightBg: "#FFE8D6",
   };
 
   const S = {
-    input: { width: "100%", padding: "10px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "8px", color: T.text, fontSize: "14px", fontFamily: "inherit", outline: "none", boxSizing: "border-box" },
-    label: { display: "block", fontSize: "11px", color: T.textMuted, marginBottom: "4px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.3px" },
-    card: { background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "14px", padding: "16px", marginBottom: "16px", boxShadow: T.cardShadow },
-    mono: { fontFamily: "'Space Mono', monospace", fontWeight: "700" },
-    greenBtn: { flex: 1, padding: "12px", background: "linear-gradient(135deg, #16a34a, #15803d)", border: "none", borderRadius: "10px", color: "#fff", fontSize: "14px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" },
-    ghostBtn: { padding: "12px 20px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px", color: T.textMuted, fontSize: "14px", fontWeight: "500", cursor: "pointer", fontFamily: "inherit" },
+    input: { width: "100%", padding: "12px 14px", background: T.card, border: `1px solid ${T.inputBorder}`, borderRadius: "12px", color: T.text, fontSize: "14px", fontFamily: "inherit", outline: "none", boxSizing: "border-box" },
+    label: { display: "block", fontSize: "11px", color: T.textMuted, marginBottom: "6px", fontWeight: "500", textTransform: "uppercase", letterSpacing: "0.6px" },
+    card: { background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: "16px", padding: "16px", marginBottom: "14px", boxShadow: T.cardShadow },
+    mono: { fontFamily: '"Instrument Serif", Georgia, serif', fontWeight: "400", letterSpacing: "-0.3px" },
+    greenBtn: { flex: 1, padding: "14px", background: T.primary, border: "none", borderRadius: "14px", color: "#fff", fontSize: "15px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", letterSpacing: "-0.2px" },
+    ghostBtn: { padding: "14px 20px", background: "transparent", border: `1.5px solid ${T.inputBorder}`, borderRadius: "14px", color: T.text, fontSize: "15px", fontWeight: "500", cursor: "pointer", fontFamily: "inherit" },
   };
 
   const DelBtn = ({ id, onDel, confirm, setConfirm }) => confirm === id ? (
@@ -517,7 +541,7 @@ export default function BudgetApp() {
 
   if (pinHash && !unlocked) {
     return (
-      <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "'DM Sans', 'Segoe UI', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+      <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "Inter, system-ui, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
         <div style={{ textAlign: "center", maxWidth: "360px", width: "100%" }}>
           <p style={{ fontSize: "40px", margin: "0 0 10px", opacity: 0.5 }}>🔒</p>
           <h2 style={{ fontSize: "18px", fontWeight: "600", margin: "0 0 6px" }}>Budget Tracker</h2>
@@ -570,8 +594,7 @@ export default function BudgetApp() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "Inter, system-ui, sans-serif" }}>
 
       {toast && (
         <div className="toast" style={{ position: "fixed", top: "16px", left: "50%", transform: "translateX(-50%)", zIndex: 1000, padding: "10px 18px", background: toast.type === "err" ? T.danger : T.accent, color: "#fff", borderRadius: "999px", fontSize: "13px", fontWeight: "600", boxShadow: "0 4px 16px rgba(0,0,0,0.2)", maxWidth: "90vw", display: "flex", alignItems: "center", gap: "10px" }}>
@@ -583,20 +606,20 @@ export default function BudgetApp() {
       )}
 
       {fabVisible && (
-        <button className="fab" onClick={fabAction} title="Quick add" style={{ position: "fixed", bottom: "24px", right: "24px", zIndex: 900, width: "56px", height: "56px", borderRadius: "50%", background: "linear-gradient(135deg, #16a34a, #15803d)", color: "#fff", border: "none", fontSize: "28px", fontWeight: "300", cursor: "pointer", boxShadow: "0 4px 20px rgba(22,163,74,0.4)", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>+</button>
+        <button className="fab" onClick={fabAction} title="Quick add" style={{ position: "fixed", bottom: "24px", right: "24px", zIndex: 900, width: "56px", height: "56px", borderRadius: "50%", background: T.primary, color: "#fff", border: "none", fontSize: "28px", fontWeight: "300", cursor: "pointer", boxShadow: "0 4px 20px rgba(22,163,74,0.4)", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>+</button>
       )}
 
       {/* HEADER */}
       <div style={{ padding: "24px 20px 16px", borderBottom: `1px solid ${T.tabBorder}`, background: T.headerBg }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
           <div>
-            <h1 style={{ fontSize: "22px", fontWeight: "700", margin: 0, letterSpacing: "-0.5px", color: T.text }}>Budget Tracker</h1>
+            <h1 style={{ fontSize: "26px", fontWeight: "400", margin: 0, letterSpacing: "-0.8px", color: T.text, fontFamily: '"Instrument Serif", Georgia, serif' }}>budget</h1>
             <p style={{ margin: "4px 0 0", fontSize: "12px", color: T.textLight }}>{items.length === 0 ? "Add items to get started" : `${items.length} items · ${goals.length} goals`}</p>
           </div>
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
             <button onClick={() => setActiveTab(activeTab === "settings" ? "dashboard" : "settings")} style={{ background: activeTab === "settings" ? T.accentBg : T.toggleBg, border: `1px solid ${activeTab === "settings" ? T.accentBorder : T.inputBorder}`, color: activeTab === "settings" ? T.accent : T.textMuted, padding: "8px 10px", borderRadius: "10px", fontSize: "16px", cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }} title="Settings">⚙</button>
             <button onClick={() => { setDarkModeAuto(false); setDarkMode(!darkMode); }} style={{ background: T.toggleBg, border: `1px solid ${T.inputBorder}`, color: T.textMuted, padding: "8px 10px", borderRadius: "10px", fontSize: "16px", cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }} title={darkMode ? "Light mode" : "Dark mode"}>{darkMode ? "☀" : "☾"}</button>
-            <button onClick={() => { resetForm(); setShowForm(true); setActiveTab("items"); }} style={{ background: "linear-gradient(135deg, #16a34a, #15803d)", border: "none", color: "#fff", padding: "10px 18px", borderRadius: "10px", fontSize: "13px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(22,163,74,0.25)" }}>+ Add</button>
+            <button onClick={() => { resetForm(); setShowForm(true); setActiveTab("items"); }} style={{ background: T.primary, border: "none", color: "#fff", padding: "10px 18px", borderRadius: "10px", fontSize: "13px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(22,163,74,0.25)" }}>+ Add</button>
           </div>
         </div>
         <div style={{ display: "flex", gap: "4px", background: T.toggleBg, borderRadius: "10px", padding: "3px" }}>
@@ -1846,7 +1869,7 @@ export default function BudgetApp() {
                     )}
                     <div style={{ display: "flex", gap: "6px" }}>
                       <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }} placeholder="Ask about your budget…" disabled={chatLoading} style={{ ...S.input, flex: 1 }} />
-                      <button onClick={sendChatMessage} disabled={chatLoading || !chatInput.trim()} style={{ padding: "10px 16px", background: "linear-gradient(135deg, #16a34a, #15803d)", border: "none", borderRadius: "8px", color: "#fff", fontSize: "13px", fontWeight: "600", cursor: chatLoading || !chatInput.trim() ? "default" : "pointer", fontFamily: "inherit", opacity: chatLoading || !chatInput.trim() ? 0.5 : 1 }}>Send</button>
+                      <button onClick={sendChatMessage} disabled={chatLoading || !chatInput.trim()} style={{ padding: "10px 16px", background: T.primary, border: "none", borderRadius: "8px", color: "#fff", fontSize: "13px", fontWeight: "600", cursor: chatLoading || !chatInput.trim() ? "default" : "pointer", fontFamily: "inherit", opacity: chatLoading || !chatInput.trim() ? 0.5 : 1 }}>Send</button>
                     </div>
                   </>
                 )}
