@@ -4,7 +4,7 @@ import { loadStored, saveStored, clearStored } from "./lib/storage.js";
 import { toYr, convertBy, advanceDue, rollForwardDue, daysUntil } from "./lib/calc.js";
 import { makeFmt } from "./lib/format.js";
 import { parseCSV, detectColumns, rowsToTransactions } from "./lib/csv.js";
-import { detectSubscriptions, guessCategoryFromDescription } from "./lib/subscriptions.js";
+import { detectSubscriptions, detectRecurringIncome, guessCategoryFromDescription } from "./lib/subscriptions.js";
 import { BANK_PRESETS } from "./lib/bankPresets.js";
 import { computeCoach, generateInsights, scoreLabel } from "./lib/coach.js";
 import { askGemini, buildFinancialContext, getStoredKey, storeKey } from "./lib/ai.js";
@@ -182,8 +182,9 @@ export default function BudgetApp() {
 
   const convert = useCallback(convertBy(view), [view]);
 
-  const incomeItems = items.filter(i => i.isIncome);
-  const expenseItems = items.filter(i => !i.isIncome);
+  const incomeItems = items.filter(i => i.isIncome && !i.cancelled);
+  const expenseItems = items.filter(i => !i.isIncome && !i.cancelled);
+  const cancelledItems = items.filter(i => i.cancelled);
   const totalIncome = incomeItems.reduce((s, i) => s + convert(i.amount, i.frequency), 0);
   const totalExpenses = expenseItems.reduce((s, i) => s + convert(i.amount, i.frequency), 0);
   const leftover = totalIncome - totalExpenses;
@@ -258,8 +259,10 @@ export default function BudgetApp() {
 
   const runDetectSubs = () => {
     const subs = detectSubscriptions(transactions);
-    setDetectedSubs(subs);
-    setSelectedSubIds(new Set(subs.map((s) => s.id)));
+    const incomes = detectRecurringIncome(transactions);
+    const all = [...incomes, ...subs];
+    setDetectedSubs(all);
+    setSelectedSubIds(new Set(all.map((s) => s.id)));
   };
 
   const saveAiKey = () => {
@@ -306,9 +309,9 @@ export default function BudgetApp() {
         name: s.displayName,
         amount: s.amount,
         frequency: s.frequency,
-        category: s.category,
-        isIncome: false,
-        dueDate: s.lastDate || "",
+        category: s.isIncome ? "income" : s.category,
+        isIncome: !!s.isIncome,
+        dueDate: s.isIncome ? "" : (s.lastDate || ""),
       }));
     if (toAdd.length > 0) setItems((p) => [...p, ...toAdd]);
     setImportMsg({ type: "ok", text: `Added ${toAdd.length} recurring items to Budget` });
@@ -979,8 +982,9 @@ export default function BudgetApp() {
                         <p style={{ margin: 0, fontSize: "13px", fontWeight: "500" }}>{item.name}</p>
                         <p style={{ margin: "2px 0 0", fontSize: "11px", color: T.textLight }}>{fmt(item.amount)} / {item.frequency}</p>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                         <span style={{ fontSize: "14px", ...S.mono, color: T.danger }}>-{fmt(convert(item.amount, item.frequency))}</span>
+                        <button onClick={(e) => { e.stopPropagation(); setItems(p => p.map(x => x.id === item.id ? { ...x, cancelled: true, cancelledAt: new Date().toISOString().slice(0, 10) } : x)); showToast(`${item.name} cancelled`, "ok", { label: "Undo", fn: () => setItems(p => p.map(x => x.id === item.id ? { ...x, cancelled: false, cancelledAt: undefined } : x)) }); }} title="Mark as cancelled" style={{ padding: "4px 8px", background: "transparent", border: `1px solid ${T.inputBorder}`, borderRadius: "6px", color: T.textLight, fontSize: "10px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>CANCEL</button>
                         <DelBtn id={item.id} onDel={id => { setItems(p => p.filter(x => x.id !== id)); setDeleteConfirm(null); }} confirm={deleteConfirm} setConfirm={setDeleteConfirm} />
                       </div>
                     </div>
@@ -988,6 +992,27 @@ export default function BudgetApp() {
                 </div>
               );
             })}
+
+            {cancelledItems.length > 0 && (() => {
+              const totalSavedMonthly = cancelledItems.reduce((s, i) => s + (i.isIncome ? 0 : 1) * (i.amount * (FREQUENCIES.find(f => f.id === i.frequency)?.multiplier || 0) / 12), 0);
+              return (
+                <div style={{ marginTop: "24px" }}>
+                  <h3 style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>Cancelled ({cancelledItems.length}) · Saving {fmt(totalSavedMonthly)}/mo</h3>
+                  {cancelledItems.map(item => (
+                    <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: T.inputBg, border: `1px solid ${T.inputBorder}`, borderRadius: "10px", marginBottom: "4px", opacity: 0.65 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: "13px", fontWeight: "500", textDecoration: "line-through" }}>{item.name}</p>
+                        <p style={{ margin: "2px 0 0", fontSize: "10px", color: T.textLight }}>{fmt(item.amount)}/{item.frequency} · cancelled {item.cancelledAt || ""}</p>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <button onClick={() => setItems(p => p.map(x => x.id === item.id ? { ...x, cancelled: false, cancelledAt: undefined } : x))} style={{ padding: "4px 8px", background: T.accentBg, border: `1px solid ${T.accentBorder}`, borderRadius: "6px", color: T.accent, fontSize: "10px", fontWeight: "600", cursor: "pointer", fontFamily: "inherit" }}>REACTIVATE</button>
+                        <button onClick={() => setItems(p => p.filter(x => x.id !== item.id))} style={{ padding: "4px 8px", background: "transparent", border: "none", color: T.textLight, fontSize: "16px", cursor: "pointer", lineHeight: 1 }}>×</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
 
             {incomeItems.length > 0 && <h3 style={{ margin: "20px 0 10px", fontSize: "13px", fontWeight: "600", color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.5px" }}>Income ({incomeItems.length})</h3>}
             {incomeItems.map(item => (

@@ -199,8 +199,50 @@ export function guessCategoryFromDescription(desc) {
   return "other";
 }
 
+export function detectRecurringIncome(transactions, { minOccurrences = 2, amountTolerance = 0.40 } = {}) {
+  const incomes = transactions.filter((t) => t.isIncome && !t.isTransfer && t.date && (t.note || "").trim());
+  const groups = {};
+  for (const t of incomes) {
+    const key = cleanMerchant(t.note);
+    if (key.length < 3) continue;
+    (groups[key] ||= []).push(t);
+  }
+  const out = [];
+  for (const [key, listRaw] of Object.entries(groups)) {
+    if (listRaw.length < minOccurrences) continue;
+    const list = listRaw.slice().sort((a, b) => a.date.localeCompare(b.date));
+    const intervals = [];
+    for (let i = 1; i < list.length; i++) intervals.push(daysBetween(list[i - 1].date, list[i].date));
+    const sortedInt = intervals.slice().sort((a, b) => a - b);
+    const median = sortedInt[Math.floor(sortedInt.length / 2)] ?? 0;
+    let freq = FREQ_WINDOWS.find((w) => median >= w.min && median <= w.max);
+    if (!freq && sameDayOfMonth(list.map((t) => t.date)) && median >= 15 && median <= 50) {
+      freq = FREQ_WINDOWS.find((w) => w.id === "monthly");
+    }
+    if (!freq) continue;
+    const avgAmt = list.reduce((s, t) => s + t.amount, 0) / list.length;
+    if (avgAmt <= 0) continue;
+    const maxDev = Math.max(...list.map((t) => Math.abs(t.amount - avgAmt) / avgAmt));
+    const confidence = maxDev <= 0.10 ? "high" : maxDev <= amountTolerance ? "medium" : "low";
+    out.push({
+      id: `inc-${key.replace(/\s+/g, "-")}`,
+      merchant: key,
+      displayName: titleCase(key),
+      amount: Math.round(avgAmt * 100) / 100,
+      frequency: freq.id,
+      occurrences: list.length,
+      lastDate: list[list.length - 1].date,
+      firstDate: list[0].date,
+      category: "income",
+      confidence,
+      isIncome: true,
+    });
+  }
+  return out.sort((a, b) => b.occurrences - a.occurrences || b.amount - a.amount);
+}
+
 export function detectSubscriptions(transactions, { minOccurrences = 2, amountTolerance = 0.40 } = {}) {
-  const expenses = transactions.filter((t) => !t.isIncome && t.date && (t.note || "").trim());
+  const expenses = transactions.filter((t) => !t.isIncome && !t.isTransfer && t.date && (t.note || "").trim());
   const groups = {};
   for (const t of expenses) {
     const key = cleanMerchant(t.note);
