@@ -172,6 +172,32 @@ function titleCase(s) {
   return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Pick the representative amount for a recurring charge.
+// A real subscription is paid at one recurring price; occasional outliers
+// (partial months, fees, refunds, mid-cycle pro-rates) shouldn't shift it.
+// Strategy: bucket amounts to 2dp, return the mode if any value repeats;
+// otherwise fall back to the most recent amount (reflects current price).
+function representativeAmount(list) {
+  if (list.length === 0) return 0;
+  const counts = new Map();
+  for (const t of list) {
+    const key = (Math.round(t.amount * 100) / 100).toFixed(2);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  let modeKey = null;
+  let modeCount = 0;
+  for (const [k, c] of counts) {
+    if (c > modeCount || (c === modeCount && parseFloat(k) > parseFloat(modeKey || "0"))) {
+      modeKey = k;
+      modeCount = c;
+    }
+  }
+  if (modeCount >= 2) return parseFloat(modeKey);
+  // No repeat — sort by date and use the most recent amount
+  const sorted = list.slice().sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  return sorted[sorted.length - 1].amount;
+}
+
 const CATEGORY_HINTS = {
   subscriptions: ["NETFLIX", "SPOTIFY", "DISNEY", "AMAZON PRIME", "PRIME VIDEO", "YOUTUBE", "APPLE", "GOOGLE", "STAN", "BINGE", "KAYO", "PARAMOUNT", "ADOBE", "MICROSOFT", "DROPBOX", "ICLOUD", "GITHUB", "OPENAI", "CLAUDE", "ANTHROPIC", "NOTION", "LINEAR", "FIGMA", "CANVA", "AUDIBLE", "DUOLINGO", "CHATGPT", "LINKEDIN"],
   utilities: ["TELSTRA", "OPTUS", "VODAFONE", "BELONG", "AMAYSIM", "ENERGYAUSTRALIA", "AGL", "ORIGIN", "ALINTA", "RED ENERGY", "NBN", "INTERNET", "ELECTRIC", "GAS", "WATER", "SYDNEY WATER"],
@@ -220,15 +246,15 @@ export function detectRecurringIncome(transactions, { minOccurrences = 2, amount
       freq = FREQ_WINDOWS.find((w) => w.id === "monthly");
     }
     if (!freq) continue;
-    const avgAmt = list.reduce((s, t) => s + t.amount, 0) / list.length;
-    if (avgAmt <= 0) continue;
-    const maxDev = Math.max(...list.map((t) => Math.abs(t.amount - avgAmt) / avgAmt));
+    const amt = representativeAmount(list);
+    if (amt <= 0) continue;
+    const maxDev = Math.max(...list.map((t) => Math.abs(t.amount - amt) / amt));
     const confidence = maxDev <= 0.10 ? "high" : maxDev <= amountTolerance ? "medium" : "low";
     out.push({
       id: `inc-${key.replace(/\s+/g, "-")}`,
       merchant: key,
       displayName: titleCase(key),
-      amount: Math.round(avgAmt * 100) / 100,
+      amount: Math.round(amt * 100) / 100,
       frequency: freq.id,
       occurrences: list.length,
       lastDate: list[list.length - 1].date,
@@ -272,16 +298,16 @@ export function detectSubscriptions(transactions, { minOccurrences = 2, amountTo
     }
     if (!freq) continue;
 
-    const avgAmt = list.reduce((s, t) => s + t.amount, 0) / list.length;
-    if (avgAmt <= 0) continue;
-    const maxDev = Math.max(...list.map((t) => Math.abs(t.amount - avgAmt) / avgAmt));
+    const amt = representativeAmount(list);
+    if (amt <= 0) continue;
+    const maxDev = Math.max(...list.map((t) => Math.abs(t.amount - amt) / amt));
     const confidence = maxDev <= 0.10 ? "high" : maxDev <= amountTolerance ? "medium" : "low";
 
     subs.push({
       id: `sub-${key.replace(/\s+/g, "-")}`,
       merchant: key,
       displayName: titleCase(key),
-      amount: Math.round(avgAmt * 100) / 100,
+      amount: Math.round(amt * 100) / 100,
       frequency: freq.id,
       occurrences: list.length,
       lastDate: list[list.length - 1].date,
@@ -313,12 +339,12 @@ export function detectSubscriptions(transactions, { minOccurrences = 2, amountTo
     const matches = expenses.filter((tx) => matchKnown(tx.note)?.name === known.name);
     if (matches.length === 0) continue;
     const sorted = matches.slice().sort((a, b) => a.date.localeCompare(b.date));
-    const avgAmt = matches.reduce((s, tx) => s + tx.amount, 0) / matches.length;
+    const amt = representativeAmount(matches);
     subs.push({
       id: `sub-known-${known.name.replace(/\s+/g, "-")}`,
       merchant: known.name.toUpperCase(),
       displayName: known.name,
-      amount: Math.round(avgAmt * 100) / 100,
+      amount: Math.round(amt * 100) / 100,
       frequency: known.frequency,
       occurrences: matches.length,
       lastDate: sorted[sorted.length - 1].date,
