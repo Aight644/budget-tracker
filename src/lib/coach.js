@@ -2,6 +2,17 @@ import { toYr, toMo } from "./calc.js";
 
 const LIQUID_TYPES = ["checking", "savings", "cash"];
 
+// Classify a loan account by name. Mortgages and student loans are
+// "good debt" — low interest, backed by an appreciating asset or earning power.
+// Personal / auto / other loans are neutral-to-bad.
+export function classifyLoan(account) {
+  const name = (account?.name || "").toLowerCase();
+  if (/(mortgage|home\s*loan|property\s*loan|investment\s*loan)/i.test(name)) return "mortgage";
+  if (/(student|hecs|help\s*loan|college|uni(versity)?\s*loan)/i.test(name)) return "student";
+  if (/(car|vehicle|auto(motive)?|motor)\s*(loan|finance)?/i.test(name)) return "auto";
+  return "personal";
+}
+
 export function computeCoach({ items, goals, accounts, transactions, categoryBudgets }) {
   const incomeItems = items.filter((i) => i.isIncome && !i.cancelled);
   const expenseItems = items.filter((i) => !i.isIncome && !i.cancelled);
@@ -15,11 +26,18 @@ export function computeCoach({ items, goals, accounts, transactions, categoryBud
   const liquidAssets = accounts
     .filter((a) => LIQUID_TYPES.includes(a.type) && a.includeInNetWorth !== false)
     .reduce((s, a) => s + (a.balance || 0), 0);
-  const totalDebt = accounts
-    .filter((a) => a.type === "credit" || a.type === "loan")
-    .reduce((s, a) => s + (a.balance || 0), 0);
+
+  // Separate "bad" debt (credit cards, personal/auto loans) from "good" debt (mortgages, student).
+  const creditDebt = accounts.filter((a) => a.type === "credit").reduce((s, a) => s + Math.abs(a.balance || 0), 0);
+  const loans = accounts.filter((a) => a.type === "loan");
+  const goodLoanDebt = loans.filter((l) => ["mortgage", "student"].includes(classifyLoan(l))).reduce((s, a) => s + Math.abs(a.balance || 0), 0);
+  const badLoanDebt = loans.filter((l) => !["mortgage", "student"].includes(classifyLoan(l))).reduce((s, a) => s + Math.abs(a.balance || 0), 0);
+  const badDebt = creditDebt + badLoanDebt;
+  const totalDebt = badDebt + goodLoanDebt;
 
   const emergencyMonths = monthlyExpenses > 0 ? liquidAssets / monthlyExpenses : 0;
+  // Health score penalty only considers bad debt — a 4x-income mortgage shouldn't tank the score.
+  const badDebtToIncome = yearlyIncome > 0 ? badDebt / yearlyIncome : 0;
   const debtToIncome = yearlyIncome > 0 ? totalDebt / yearlyIncome : 0;
 
   const now = new Date();
@@ -39,7 +57,7 @@ export function computeCoach({ items, goals, accounts, transactions, categoryBud
 
   let savingsScore = Math.max(0, Math.min(100, savingsRate * 500));
   let emergencyScore = accounts.length === 0 ? null : Math.max(0, Math.min(100, (emergencyMonths / 6) * 100));
-  let debtScore = accounts.length === 0 ? null : Math.max(0, Math.min(100, 100 - debtToIncome * 200));
+  let debtScore = accounts.length === 0 ? null : Math.max(0, Math.min(100, 100 - badDebtToIncome * 200));
   let budgetScore = Object.keys(categoryBudgets || {}).length === 0
     ? null
     : (categoriesOverBudget.length === 0 ? 100 : Math.max(0, 100 - categoriesOverBudget.length * 20));
@@ -65,7 +83,7 @@ export function computeCoach({ items, goals, accounts, transactions, categoryBud
   return {
     healthScore,
     scores: { savings: savingsScore, emergency: emergencyScore, debt: debtScore, budget: budgetScore, goal: goalScore },
-    metrics: { monthlyIncome, monthlyExpenses, leftover, savingsRate, liquidAssets, totalDebt, emergencyMonths, debtToIncome, subscriptionsMonthly, yearlyIncome, yearlyExpenses },
+    metrics: { monthlyIncome, monthlyExpenses, leftover, savingsRate, liquidAssets, totalDebt, badDebt, creditDebt, goodLoanDebt, badLoanDebt, emergencyMonths, debtToIncome, badDebtToIncome, subscriptionsMonthly, yearlyIncome, yearlyExpenses },
     categoriesOverBudget,
   };
 }
@@ -100,12 +118,27 @@ export function generateInsights(data, { goals, accounts, items, categoriesLooku
     }
   }
 
-  if (m.totalDebt > 0 && m.yearlyIncome > 0) {
-    if (m.debtToIncome > 0.40) {
-      out.push({ type: "warn", title: "High debt load", text: `Debt is ${(m.debtToIncome * 100).toFixed(0)}% of yearly income (${fmt(m.totalDebt)}). Prioritize high-interest debt first — credit cards before loans.` });
-    } else if (m.debtToIncome > 0.20) {
-      out.push({ type: "ok", title: "Debt is manageable", text: `${(m.debtToIncome * 100).toFixed(0)}% debt-to-income. Keep paying down steadily and avoid taking on more.` });
+  // Credit card debt (almost always bad debt — high interest, compounds fast)
+  if (m.creditDebt > 500) {
+    if (m.creditDebt > m.monthlyIncome * 2 && m.monthlyIncome > 0) {
+      out.push({ type: "warn", title: "High credit card debt", text: `${fmt(m.creditDebt)} on cards — roughly ${(m.creditDebt / m.monthlyIncome).toFixed(1)}× your monthly income. Prioritize paying this down before saving extra — card interest typically beats investment returns.` });
+    } else if (m.creditDebt > 0) {
+      out.push({ type: "ok", title: "Credit card balance", text: `${fmt(m.creditDebt)} on cards. Manageable if paid in full monthly; destructive if carried — check the interest rate.` });
     }
+  }
+
+  // Non-mortgage, non-student loans (personal, auto) — medium concern
+  if (m.badLoanDebt > 0) {
+    if (m.badLoanDebt > m.yearlyIncome * 0.5 && m.yearlyIncome > 0) {
+      out.push({ type: "warn", title: "Personal/auto loan balance", text: `${fmt(m.badLoanDebt)} in personal or auto loans — usually higher-interest than mortgages. Plan a payoff timeline; refinance if your credit has improved.` });
+    } else {
+      out.push({ type: "info", title: "Personal loans", text: `${fmt(m.badLoanDebt)} in non-mortgage loans. Pay on schedule; watch the rate.` });
+    }
+  }
+
+  // Mortgages + student loans are structurally different — "good debt"
+  if (m.goodLoanDebt > 0) {
+    out.push({ type: "info", title: "Long-term loans", text: `${fmt(m.goodLoanDebt)} in mortgages or student loans — typically low-interest and backed by an appreciating asset or earning power. Pay on schedule; focus extra capital on higher-interest debt or your emergency fund first.` });
   }
 
   if (m.subscriptionsMonthly > 0 && m.monthlyIncome > 0) {

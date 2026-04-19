@@ -12,7 +12,9 @@ export function buildFinancialContext({ items, goals, accounts, transactions, ca
     lines.push(`Savings rate: ${(m.savingsRate * 100).toFixed(1)}%`);
     if (accounts.length > 0) {
       lines.push(`Liquid assets: ${m.liquidAssets.toFixed(2)}`);
-      lines.push(`Total debt: ${m.totalDebt.toFixed(2)}`);
+      lines.push(`Credit card debt (high-interest, treat as bad debt): ${(m.creditDebt || 0).toFixed(2)}`);
+      lines.push(`Personal/auto loan debt (neutral): ${(m.badLoanDebt || 0).toFixed(2)}`);
+      lines.push(`Mortgage / student loan debt (low-interest, usually good debt): ${(m.goodLoanDebt || 0).toFixed(2)}`);
       lines.push(`Emergency fund covers: ${m.emergencyMonths.toFixed(1)} months of expenses`);
     }
     if (m.subscriptionsMonthly > 0) lines.push(`Subscriptions spend: ${m.subscriptionsMonthly.toFixed(2)}/mo`);
