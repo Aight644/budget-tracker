@@ -342,22 +342,34 @@ export default function BudgetApp() {
 
   const csvImport = () => {
     if (!csvState) return;
-    const txns = rowsToTransactions(csvState.rows, csvState.map, csvState.preferred).map((t) => ({
+    const raw = rowsToTransactions(csvState.rows, csvState.map, csvState.preferred);
+    if (raw.length === 0) {
+      showToast("No valid rows found — check column mapping", "err");
+      return;
+    }
+    // Dedup fingerprint: accountId|date|amount|first-24-chars-of-note (case-insensitive).
+    // This lets the same user re-import an overlapping CSV range from the same bank
+    // without doubling up. Different accounts (different bank) are kept separate.
+    const fp = (t) => `${csvState.accountId || "_"}|${t.date}|${(t.amount || 0).toFixed(2)}|${(t.note || "").trim().toLowerCase().slice(0, 24)}`;
+    const existing = new Set(transactions.map(fp));
+    const mapped = raw.map((t) => ({
       ...t,
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       accountId: csvState.accountId,
       category: t.isIncome ? "income" : guessCategoryFromDescription(t.note),
     }));
-    if (txns.length === 0) {
-      setImportMsg({ type: "err", text: "No valid rows found — check column mapping" });
-      setTimeout(() => setImportMsg(null), 4000);
+    const fresh = mapped.filter((t) => !existing.has(fp(t)));
+    const dupes = mapped.length - fresh.length;
+
+    if (fresh.length === 0) {
+      showToast(`All ${mapped.length} rows are duplicates of existing transactions`, "err");
+      setCsvState(null);
       return;
     }
-    setTransactions((p) => [...p, ...txns]);
-    setImportMsg({ type: "ok", text: `Imported ${txns.length} transactions` });
-    setTimeout(() => setImportMsg(null), 4000);
+    setTransactions((p) => [...p, ...fresh]);
+    showToast(dupes > 0 ? `Imported ${fresh.length} · skipped ${dupes} duplicate${dupes === 1 ? "" : "s"}` : `Imported ${fresh.length} transactions`, "ok");
     setCsvState(null);
-    const all = [...transactions, ...txns];
+    const all = [...transactions, ...fresh];
     const subs = detectSubscriptions(all);
     if (subs.length > 0) {
       setDetectedSubs(subs);
@@ -782,6 +794,8 @@ export default function BudgetApp() {
             user={user}
             state={{ items, accounts, transactions, goals, categoryBudgets }}
             actions={{ setActiveTab }}
+            view={view}
+            setView={setView}
           />
         )}
 
@@ -1763,8 +1777,9 @@ export default function BudgetApp() {
                           </div>
                         );
                       })}
-                      <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                      <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
                         <button onClick={addSelectedSubs} disabled={selectedSubIds.size === 0} style={{ ...S.greenBtn, opacity: selectedSubIds.size === 0 ? 0.5 : 1 }}>Add {selectedSubIds.size} to Budget</button>
+                        <button onClick={() => { setDetectedSubs(null); setTimeout(() => csvFileRef.current?.click(), 50); }} style={S.ghostBtn}>↑ Import another CSV</button>
                         <button onClick={() => setDetectedSubs(null)} style={S.ghostBtn}>Dismiss</button>
                       </div>
                     </>

@@ -3,7 +3,11 @@ import { Glyph, Donut, ProgressBar, SectionHeader } from "./Primitives.jsx";
 import { CATEGORIES, FREQUENCIES } from "../lib/constants.js";
 import { toFn, toMo, toYr } from "../lib/calc.js";
 
-const fn = (amt, freq) => toFn(amt, freq);
+const VIEWS = {
+  fortnightly: { convert: toFn, days: 14, label: "fortnight", short: "fn" },
+  monthly: { convert: toMo, days: 30, label: "month", short: "mo" },
+  yearly: { convert: toYr, days: 365, label: "year", short: "yr" },
+};
 
 function MiniInline({ label, value, T, onDark }) {
   return (
@@ -14,9 +18,16 @@ function MiniInline({ label, value, T, onDark }) {
   );
 }
 
-function TabPill({ children, T }) {
+function TabPill({ children, active, onClick, T }) {
   return (
-    <div style={{ background: T.primary, color: "#fff", padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: FONT.ui }}>{children}</div>
+    <button onClick={onClick} style={{
+      background: active ? T.primary : "transparent",
+      color: active ? "#fff" : T.muted,
+      border: active ? "none" : `1px solid ${T.line}`,
+      padding: "6px 14px", borderRadius: 8,
+      fontSize: 12, fontWeight: 600, fontFamily: FONT.ui,
+      cursor: "pointer",
+    }}>{children}</button>
   );
 }
 
@@ -73,23 +84,24 @@ function CashflowChart({ income, expense, labels, T }) {
   );
 }
 
-export default function DashboardView({ T, fmt, state, actions, user }) {
+export default function DashboardView({ T, fmt, state, actions, user, view = "fortnightly", setView }) {
   const { items, accounts, transactions, goals, categoryBudgets } = state;
+  const V = VIEWS[view] || VIEWS.fortnightly;
   const incomeItems = items.filter((i) => i.isIncome && !i.cancelled);
   const expenseItems = items.filter((i) => !i.isIncome && !i.cancelled);
-  const incomeFn = incomeItems.reduce((s, i) => s + fn(i.amount, i.frequency), 0);
-  const expenseFn = expenseItems.reduce((s, i) => s + fn(i.amount, i.frequency), 0);
-  const leftover = incomeFn - expenseFn;
+  const incomePer = incomeItems.reduce((s, i) => s + V.convert(i.amount, i.frequency), 0);
+  const expensePer = expenseItems.reduce((s, i) => s + V.convert(i.amount, i.frequency), 0);
+  const leftover = incomePer - expensePer;
 
   const liquidTypes = ["checking", "savings", "cash"];
   const liquid = accounts.filter((a) => liquidTypes.includes(a.type) && a.includeInNetWorth !== false).reduce((s, a) => s + (a.balance || 0), 0);
   const monthlyExp = expenseItems.reduce((s, i) => s + toMo(i.amount, i.frequency), 0);
   const emergencyMo = monthlyExp > 0 ? liquid / monthlyExp : 0;
-  const savingsRate = incomeFn > 0 ? leftover / incomeFn : 0;
+  const savingsRate = incomePer > 0 ? leftover / incomePer : 0;
   const healthScore = Math.round(Math.max(0, Math.min(100, savingsRate * 300 + Math.min(emergencyMo / 6, 1) * 40 + 10)));
 
   const catTotals = CATEGORIES.filter((c) => c.id !== "income").map((c) => {
-    const v = expenseItems.filter((i) => i.category === c.id).reduce((s, i) => s + fn(i.amount, i.frequency), 0);
+    const v = expenseItems.filter((i) => i.category === c.id).reduce((s, i) => s + V.convert(i.amount, i.frequency), 0);
     return { id: c.id, label: c.label, value: Math.round(v), color: c.color, icon: c.icon };
   }).filter((c) => c.value > 0).sort((a, b) => b.value - a.value);
   const totalSpend = catTotals.reduce((s, x) => s + x.value, 0);
@@ -123,8 +135,9 @@ export default function DashboardView({ T, fmt, state, actions, user }) {
   // Insights derivation
   const insights = [];
   const subsTotal = expenseItems.filter((i) => i.category === "subscriptions").reduce((s, i) => s + toMo(i.amount, i.frequency), 0);
-  if (subsTotal > incomeFn * 0.05 / 2 && incomeFn > 0) {
-    insights.push({ id: "subs", kind: "warning", title: "Subscriptions creep", body: `You're spending ${fmt(subsTotal)}/mo on subscriptions (${((subsTotal / (incomeFn * 52 / 26 / 12)) * 100).toFixed(0)}% of income). Review for overlaps.`, action: "Review subs", tab: "subscriptions" });
+  const monthlyIncome = incomeItems.reduce((s, i) => s + toMo(i.amount, i.frequency), 0);
+  if (subsTotal > monthlyIncome * 0.05 && monthlyIncome > 0) {
+    insights.push({ id: "subs", kind: "warning", title: "Subscriptions creep", body: `You're spending ${fmt(subsTotal)}/mo on subscriptions (${((subsTotal / monthlyIncome) * 100).toFixed(0)}% of income). Review for overlaps.`, action: "Review subs", tab: "subscriptions" });
   }
   if (emergencyMo < 3 && accounts.length > 0) {
     insights.push({ id: "ef", kind: "info", title: "Emergency fund below target", body: `${emergencyMo.toFixed(1)} months covered — target is 3–6 months (${fmt(monthlyExp * 3)}+).`, action: "See goals", tab: "goals" });
@@ -153,9 +166,11 @@ export default function DashboardView({ T, fmt, state, actions, user }) {
           <h1 style={{ fontFamily: FONT.serif, fontSize: 34, letterSpacing: -1, marginTop: 4, marginBottom: 0, fontWeight: 400 }}>{greeting}, {nameCap}.</h1>
         </div>
         <div className="dash-date-tabs" style={{ display: "flex", gap: 8 }}>
-          <TabPill T={T}>Fortnightly</TabPill>
-          <button style={ghostBtn(T)}>Monthly</button>
-          <button style={ghostBtn(T)}>Yearly</button>
+          {["fortnightly", "monthly", "yearly"].map((v) => (
+            <TabPill key={v} active={view === v} onClick={() => setView && setView(v)} T={T}>
+              {v[0].toUpperCase() + v.slice(1)}
+            </TabPill>
+          ))}
         </div>
       </div>
 
@@ -164,7 +179,7 @@ export default function DashboardView({ T, fmt, state, actions, user }) {
           <div style={{ position: "absolute", top: -80, right: -60, width: 280, height: 280, borderRadius: "50%", background: `radial-gradient(circle at 30% 30%, ${T.accent}aa, transparent 65%)`, opacity: 0.9 }} />
           <div style={{ position: "relative" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ fontSize: 11, opacity: 0.8, textTransform: "uppercase", letterSpacing: 1.2, fontWeight: 600 }}>Leftover · fortnight</div>
+              <div style={{ fontSize: 11, opacity: 0.8, textTransform: "uppercase", letterSpacing: 1.2, fontWeight: 600 }}>Leftover · {V.label}</div>
               {leftover >= 0 && <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 99, background: "rgba(16,185,129,0.35)", color: "#d1fae5", fontWeight: 600 }}>on track</span>}
               {leftover < 0 && <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 99, background: "rgba(248,113,113,0.3)", color: "#fecaca", fontWeight: 600 }}>over</span>}
             </div>
@@ -172,11 +187,11 @@ export default function DashboardView({ T, fmt, state, actions, user }) {
               {fmt(leftover)}
             </div>
             <div style={{ fontSize: 13, opacity: 0.76, marginTop: 8 }}>
-              {leftover > 0 ? <>Safe to spend <b style={{ color: T.accent }}>{fmt(leftover / 14)}/day</b> for next 14 days</> : <>Trim expenses or increase income to rebalance.</>}
+              {leftover > 0 ? <>Safe to spend <b style={{ color: T.accent }}>{fmt(leftover / V.days)}/day</b> for next {V.days} days</> : <>Trim expenses or increase income to rebalance.</>}
             </div>
             <div style={{ marginTop: 20, display: "flex", gap: 24, flexWrap: "wrap" }}>
-              <MiniInline label="Income" value={fmt(incomeFn)} T={T} onDark />
-              <MiniInline label="Expenses" value={fmt(expenseFn)} T={T} onDark />
+              <MiniInline label="Income" value={fmt(incomePer)} T={T} onDark />
+              <MiniInline label="Expenses" value={fmt(expensePer)} T={T} onDark />
               <MiniInline label="Saved" value={fmt(Math.max(0, leftover))} T={T} onDark />
             </div>
           </div>
