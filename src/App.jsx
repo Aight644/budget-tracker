@@ -70,7 +70,7 @@ export default function BudgetApp() {
   const [accounts, setAccounts] = useState([]);
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState(null);
-  const [accountFormData, setAccountFormData] = useState({ name: "", type: "checking", balance: "", color: "#2563eb", includeInNetWorth: true });
+  const [accountFormData, setAccountFormData] = useState({ name: "", type: "checking", balance: "", color: "#2563eb", includeInNetWorth: true, loanKind: "" });
   const [deleteAccountConfirm, setDeleteAccountConfirm] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [showTxnForm, setShowTxnForm] = useState(false);
@@ -300,7 +300,7 @@ export default function BudgetApp() {
 
   const resetForm = () => { setFormData({ name: "", amount: "", frequency: "monthly", category: "other", isIncome: false, dueDate: "" }); setEditingId(null); setShowForm(false); };
   const resetGoalForm = () => { setGoalFormData({ name: "", target: "", saved: "0", monthlySaving: "", deadline: "", color: "#16a34a" }); setEditingGoalId(null); setShowGoalForm(false); };
-  const resetAccountForm = () => { setAccountFormData({ name: "", type: "checking", balance: "", color: "#2563eb", includeInNetWorth: true }); setEditingAccountId(null); setShowAccountForm(false); };
+  const resetAccountForm = () => { setAccountFormData({ name: "", type: "checking", balance: "", color: "#2563eb", includeInNetWorth: true, loanKind: "" }); setEditingAccountId(null); setShowAccountForm(false); };
 
   const handleAccountSubmit = () => {
     if (!accountFormData.name.trim()) return;
@@ -313,7 +313,7 @@ export default function BudgetApp() {
   };
 
   const startEditAccount = (a) => {
-    setAccountFormData({ name: a.name, type: a.type, balance: a.balance.toString(), color: a.color || "#2563eb", includeInNetWorth: a.includeInNetWorth !== false });
+    setAccountFormData({ name: a.name, type: a.type, balance: a.balance.toString(), color: a.color || "#2563eb", includeInNetWorth: a.includeInNetWorth !== false, loanKind: a.loanKind || "" });
     setEditingAccountId(a.id);
     setShowAccountForm(true);
   };
@@ -1465,6 +1465,45 @@ export default function BudgetApp() {
                   <input type="number" value={accountFormData.balance} onChange={e => setAccountFormData({ ...accountFormData, balance: e.target.value })} placeholder="0.00" style={S.input} />
                   {ACCOUNT_TYPES.find(t => t.id === accountFormData.type)?.isLiability && <p style={{ margin: "4px 0 0", fontSize: "10px", color: T.textLight }}>Enter the amount owed as a positive number</p>}
                 </div>
+                {accountFormData.type === "loan" && (
+                  <div style={{ marginBottom: "10px" }}>
+                    <label style={S.label}>Loan kind</label>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px" }}>
+                      {[
+                        { id: "mortgage", label: "Home loan", hint: "good debt" },
+                        { id: "student", label: "Student / HECS", hint: "good debt" },
+                        { id: "auto", label: "Car / auto", hint: "neutral" },
+                        { id: "personal", label: "Personal", hint: "bad debt" },
+                        { id: "bnpl", label: "BNPL", hint: "bad debt" },
+                        { id: "other", label: "Other", hint: "" },
+                      ].map(k => (
+                        <button
+                          key={k.id}
+                          type="button"
+                          onClick={() => setAccountFormData({ ...accountFormData, loanKind: k.id })}
+                          style={{
+                            padding: "8px 6px",
+                            border: accountFormData.loanKind === k.id ? `2px solid ${T.primary}` : `1px solid ${T.inputBorder}`,
+                            borderRadius: "8px",
+                            background: accountFormData.loanKind === k.id ? T.primarySoft : T.catBtnBg,
+                            color: accountFormData.loanKind === k.id ? T.primary : T.textMuted,
+                            fontSize: "11px",
+                            fontWeight: "600",
+                            cursor: "pointer",
+                            fontFamily: "inherit",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "2px",
+                          }}
+                        >
+                          <span>{k.label}</span>
+                          {k.hint && <span style={{ fontSize: "9px", fontWeight: 500, opacity: 0.7 }}>{k.hint}</span>}
+                        </button>
+                      ))}
+                    </div>
+                    <p style={{ margin: "6px 0 0", fontSize: "10px", color: T.textLight }}>Helps the Coach distinguish good debt (mortgages, student loans) from bad debt (credit cards, personal loans).</p>
+                  </div>
+                )}
                 <div style={{ marginBottom: "14px" }}>
                   <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12px", color: T.textMuted }}>
                     <input type="checkbox" checked={accountFormData.includeInNetWorth} onChange={e => setAccountFormData({ ...accountFormData, includeInNetWorth: e.target.checked })} />

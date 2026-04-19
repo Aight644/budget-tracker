@@ -2,14 +2,19 @@ import { toYr, toMo } from "./calc.js";
 
 const LIQUID_TYPES = ["checking", "savings", "cash"];
 
-// Classify a loan account by name. Mortgages and student loans are
-// "good debt" — low interest, backed by an appreciating asset or earning power.
-// Personal / auto / other loans are neutral-to-bad.
+// Classify a loan account. Prefer explicit loanKind from the account form;
+// fall back to name parsing for legacy/unspecified accounts.
+// Mortgages and student loans are "good debt" — low interest, backed by an
+// appreciating asset or earning power. Personal / auto / BNPL / other are
+// neutral-to-bad.
 export function classifyLoan(account) {
+  const explicit = (account?.loanKind || "").toLowerCase();
+  if (explicit) return explicit;
   const name = (account?.name || "").toLowerCase();
   if (/(mortgage|home\s*loan|property\s*loan|investment\s*loan)/i.test(name)) return "mortgage";
   if (/(student|hecs|help\s*loan|college|uni(versity)?\s*loan)/i.test(name)) return "student";
   if (/(car|vehicle|auto(motive)?|motor)\s*(loan|finance)?/i.test(name)) return "auto";
+  if (/(afterpay|zip|klarna|bnpl|buy\s*now)/i.test(name)) return "bnpl";
   return "personal";
 }
 
